@@ -689,7 +689,7 @@
     const [branches, setBranches]   = useState([]);
     const [curBranch, setCurBranch] = useState(null);
     const [settings, setSettings]   = useState({
-      level:'advanced', intensity:'moderate', rounds:1,
+      level:'advanced', intensity:'moderate', rounds:5,
       model:'gemini-2.0-flash',
       reqDelay:5,   // リクエスト間隔（秒）。無料Gemini 2.0 Flash = 15 RPM → 5s推奨
     });
@@ -708,10 +708,13 @@
     const settingsRef  = useRef(settings);
     const topicRef     = useRef(topic);
 
+    const [topicHistory, setTopicHistory] = useState(() => JSON.parse(localStorage.getItem('eds_topic_history') || '[]'));
+
     useEffect(()=>{ expertsRef.current = experts; }, [experts]);
     useEffect(()=>{ settingsRef.current = settings; }, [settings]);
     useEffect(()=>{ topicRef.current = topic; }, [topic]);
     useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [branches, isGen]);
+    useEffect(()=>{ localStorage.setItem('eds_topic_history', JSON.stringify(topicHistory)); }, [topicHistory]);
 
     const currentBranch = branches.find(b=>b.id===curBranch);
     const messages = currentBranch?.messages || [];
@@ -849,6 +852,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
       initBranch(id);
       setBranches([{ id, name:'本流', parentId:null, messages:[] }]);
       setCurBranch(id);
+      if(!topicHistory.includes(topic)) setTopicHistory(prev => [topic, ...prev].slice(0, 10));
       setIsStarted(true); setIsGen(true); isGenRef.current=true; setError(null);
       try { await runTurns(id, settings.rounds); }
       catch(e){ setError(e.message); }
@@ -1034,7 +1038,28 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
                 </div>
               </div>
             </div>
+            <div className="sidebar-section">
+              <div className="sidebar-title">現在の議題</div>
+              <div style={{fontSize:'12px', color:'#374151', background:'#fff', padding:'8px', borderRadius:'6px', border:'1px solid #e2e0db', marginBottom:'10px', wordBreak:'break-word'}}>
+                {topic || '未設定'}
+              </div>
+              {topicHistory.length > 0 && (
+                <>
+                  <div className="sidebar-title" style={{marginTop:'12px'}}>過去の議題</div>
+                  <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+                    {topicHistory.filter(t => t !== topic).map((t, i) => (
+                      <div key={i} onClick={() => !isGen && setTopic(t)} style={{fontSize:'11px', color:'#6b7280', cursor:isGen ? 'default' : 'pointer', padding:'4px 6px', borderRadius:'4px', border:'1px solid transparent', transition:'all 0.15s', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} className="hist-item">
+                        {t}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+          <style>{`
+            .hist-item:hover { background: #f0f4f9; border-color: #c8d5e3; color: #5a7ba2; }
+          `}</style>
 
           {/* Content */}
           <div className="content-area">
