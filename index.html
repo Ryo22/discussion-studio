@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expert Discussion Studio</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    /*
+     * カラーパレット
+     * --header:   #2c3345  落ち着いたダークスレート（ヘッダー）
+     * --accent:   #5a7ba2  ミュートスレートブルー（アクセント）
+     * --accent-h: #486690  ホバー時のアクセント
+     * --accent-l: #edf1f6  アクセントの薄い背景
+     * --bg:       #f0efec  ウォームオフホワイト（背景）
+     * --surface:  #ffffff  カード・サイドバー
+     * --border:   #e2e0db  ウォームグレーボーダー
+     * --text1:    #2d3142  プライマリテキスト
+     * --text2:    #6b7280  セカンダリテキスト
+     * --text3:    #9ca3af  三次テキスト（ヒント）
+     */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f0efec; height: 100vh; overflow: hidden; color: #2d3142;
+    }
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── TopBar ── */
+    .topbar {
+      background: #2c3345;
+      color: #e8eaf0; padding: 0 20px; height: 54px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.2); z-index: 20; flex-shrink: 0;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo {
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 7px; display: flex; align-items: center; justify-content: center;
+      color: #c8d0df; font-weight: 800; font-size: 12px; letter-spacing: -0.5px; flex-shrink: 0;
+    }
+    .topbar-title { font-size: 15px; font-weight: 600; color: #dde1ea; letter-spacing: 0.2px; }
+    .topbar-subtitle { font-size: 10px; color: #7c8499; margin-top: 1px; }
+    .topbar-right { display: flex; align-items: center; gap: 2px; }
+    .icon-btn {
+      background: none; border: none; color: #9aa0b5; cursor: pointer;
+      padding: 7px; border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s, color 0.15s; font-size: 16px;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.1); color: #dde1ea; }
+    .topbar-chip {
+      padding: 3px 10px; border-radius: 10px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+      font-size: 10px; color: #9aa0b5; letter-spacing: 0.2px;
+    }
+
+    /* ── Layout ── */
+    .main-layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 266px; flex-shrink: 0;
+      background: #faf9f7;
+      border-right: 1px solid #e2e0db;
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .sidebar-section { padding: 12px 14px; }
+    .sidebar-section + .sidebar-section { border-top: 1px solid #ece9e4; }
+    .sidebar-title {
+      font-size: 9.5px; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px;
+    }
+
+    /* Expert items */
+    .expert-item {
+      display: flex; align-items: center; gap: 8px; padding: 6px 7px;
+      border-radius: 7px; transition: background 0.15s; margin-bottom: 2px;
+      position: relative;
+    }
+    .expert-item:hover { background: #f0ede8; }
+    .expert-item:hover .expert-edit-btn { opacity: 1; }
+    .expert-info { flex: 1; min-width: 0; }
+    .expert-dname { font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .expert-role-small { font-size: 10px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .expert-edit-btn {
+      opacity: 0; flex-shrink: 0;
+      padding: 2px 7px; font-size: 10px; border: 1px solid #d1cdc6;
+      border-radius: 6px; background: white; cursor: pointer; color: #6b7280;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .expert-edit-btn:hover { border-color: #5a7ba2; color: #5a7ba2; background: #edf1f6; }
+
+    /* Power badge in sidebar */
+    .power-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 5px;
+      flex-shrink: 0; min-width: 26px; text-align: center;
+    }
+
+    .add-expert-btn {
+      width: 100%; padding: 6px; border: 1.5px dashed #d1cdc6;
+      border-radius: 7px; background: none; cursor: pointer; color: #9ca3af;
+      font-size: 11px; font-family: inherit; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 4px;
+    }
+    .add-expert-btn:hover { border-color: #5a7ba2; color: #5a7ba2; background: #edf1f6; }
+
+    /* Settings */
+    .setting-item { margin-bottom: 12px; }
+    .setting-label { font-size: 11px; font-weight: 600; color: #4b5563; margin-bottom: 5px; }
+    .chip-group { display: flex; gap: 4px; flex-wrap: wrap; }
+    .chip {
+      padding: 3px 9px; border-radius: 10px; border: 1px solid #d1cdc6;
+      font-size: 10px; cursor: pointer; transition: all 0.15s;
+      background: white; color: #4b5563; font-family: inherit; font-weight: 500;
+    }
+    .chip:hover { border-color: #5a7ba2; color: #5a7ba2; }
+    .chip.active { background: #edf1f6; border-color: #5a7ba2; color: #5a7ba2; font-weight: 700; }
+    .round-ctrl { display: flex; align-items: center; gap: 7px; }
+    .round-btn {
+      width: 24px; height: 24px; border-radius: 50%; border: 1px solid #d1cdc6;
+      background: none; cursor: pointer; font-size: 14px; color: #4b5563;
+      display: flex; align-items: center; justify-content: center; transition: all 0.15s; font-family: inherit;
+    }
+    .round-btn:hover { border-color: #5a7ba2; color: #5a7ba2; }
+    .round-val { font-size: 15px; font-weight: 700; min-width: 20px; text-align: center; color: #374151; }
+
+    /* ── Content Area ── */
+    .content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Landing */
+    .landing { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px; overflow-y: auto; }
+    .landing-card {
+      background: white; border-radius: 14px; padding: 38px 44px;
+      max-width: 600px; width: 100%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06);
+      border: 1px solid #e2e0db;
+      text-align: center;
+    }
+    .landing-icon { font-size: 48px; margin-bottom: 12px; }
+    .landing-title { font-size: 22px; font-weight: 700; color: #2d3142; margin-bottom: 6px; }
+    .landing-sub { font-size: 13px; color: #6b7280; margin-bottom: 22px; line-height: 1.65; }
+    .role-preview-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+      margin-bottom: 22px; text-align: left;
+    }
+    .role-preview-item {
+      display: flex; align-items: center; gap: 5px;
+      background: #f7f6f3; padding: 4px 8px; border-radius: 7px; border: 1px solid #ece9e4;
+    }
+    .role-preview-name { font-size: 10px; font-weight: 500; line-height: 1.3; color: #4b5563; }
+    .topic-textarea {
+      width: 100%; padding: 13px 16px; font-size: 14px;
+      border: 1.5px solid #d1cdc6; border-radius: 10px; outline: none;
+      font-family: inherit; resize: vertical; min-height: 85px;
+      transition: border-color 0.2s, box-shadow 0.2s; line-height: 1.6; color: #2d3142;
+      background: #faf9f7;
+    }
+    .topic-textarea:focus { border-color: #5a7ba2; box-shadow: 0 0 0 3px rgba(90,123,162,0.1); background: white; }
+    .hint-text { font-size: 10px; color: #9ca3af; margin-top: 5px; }
+    .start-btn {
+      margin-top: 16px; padding: 11px 32px;
+      background: #3a4f6e; color: white;
+      border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; font-family: inherit; letter-spacing: 0.3px;
+    }
+    .start-btn:hover:not(:disabled) { background: #2c3e55; box-shadow: 0 3px 10px rgba(44,62,85,0.3); }
+    .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Discussion */
+    .discussion-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topic-bar {
+      background: white; padding: 8px 18px; border-bottom: 1px solid #e2e0db;
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    .topic-bar-label { font-size: 9px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
+    .topic-bar-text { font-size: 13px; font-weight: 500; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #374151; }
+    .topic-bar-badge {
+      font-size: 10px; padding: 2px 9px; border-radius: 8px;
+      background: #edf1f6; color: #5a7ba2; font-weight: 600; flex-shrink: 0;
+      border: 1px solid #c8d5e3;
+    }
+    .branch-tabs {
+      background: white; border-bottom: 1px solid #e2e0db;
+      padding: 0 18px; display: flex; align-items: center; gap: 2px; overflow-x: auto; flex-shrink: 0;
+    }
+    .branch-tab {
+      padding: 7px 13px; font-size: 11px; font-weight: 500;
+      border: none; background: none; cursor: pointer;
+      border-bottom: 2px solid transparent; white-space: nowrap; color: #9ca3af;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .branch-tab:hover { color: #5a7ba2; }
+    .branch-tab.active { color: #3a4f6e; border-bottom-color: #3a4f6e; font-weight: 600; }
+    .branch-count { font-size: 9px; margin-left: 3px; opacity: 0.6; }
+    .error-banner {
+      background: #fef2f2; border-bottom: 1px solid #fca5a5; color: #b91c1c;
+      padding: 9px 16px; font-size: 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
+    .error-close { margin-left: auto; background: none; border: none; cursor: pointer; color: #b91c1c; font-size: 15px; }
+    .messages-scroll { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 11px; background: #f0efec; }
+
+    /* Message */
+    .msg-card {
+      background: white; border-radius: 10px; padding: 12px 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      position: relative; transition: box-shadow 0.2s;
+      border: 1px solid #e8e5e0; border-left-width: 3px; border-left-color: #d1cdc6;
+    }
+    .msg-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.09); }
+    .msg-card:hover .msg-actions { opacity: 1; }
+    .msg-card.user-msg {
+      background: #f0f4f9; border-color: #c8d5e3; border-left-color: #5a7ba2;
+      margin-left: 36px;
+    }
+    .msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .msg-meta { flex: 1; min-width: 0; }
+    .msg-name { font-size: 12px; font-weight: 700; color: #374151; }
+    .msg-role-label { font-size: 10px; color: #9ca3af; font-weight: 400; }
+    .msg-time { font-size: 9px; color: #c0bdb7; margin-left: 5px; }
+    .msg-body { font-size: 13px; line-height: 1.8; color: #374151; white-space: pre-wrap; }
+    .msg-actions { position: absolute; top: 9px; right: 9px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+    .msg-action-btn {
+      padding: 3px 9px; font-size: 10px; border: 1px solid #d1cdc6;
+      border-radius: 8px; background: white; cursor: pointer; color: #6b7280;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .msg-action-btn:hover { border-color: #5a7ba2; color: #5a7ba2; background: #edf1f6; }
+
+    /* Typing */
+    .typing-card {
+      background: white; border-radius: 10px; padding: 10px 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #e8e5e0; border-left-width: 3px;
+      display: flex; align-items: center; gap: 9px;
+    }
+    .typing-name { font-size: 11px; color: #9ca3af; }
+    .dots { display: flex; gap: 3px; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: #c0bdb7; animation: bounce 1.2s infinite; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+    /* Input bar */
+    .input-bar {
+      background: white; border-top: 1px solid #e2e0db;
+      padding: 10px 16px; display: flex; align-items: flex-end; gap: 9px; flex-shrink: 0;
+    }
+    .input-hint { font-size: 10px; color: #b0aba5; white-space: nowrap; flex-shrink: 0; padding-bottom: 9px; }
+
+    /* Rich text input – contentEditable */
+    .input-field-rich {
+      flex: 1;
+      min-height: 40px; max-height: 160px;
+      padding: 9px 14px;
+      border: 1.5px solid #d1cdc6; border-radius: 10px; outline: none;
+      font-size: 13.5px; font-family: inherit;
+      line-height: 1.75; letter-spacing: 0.01em;
+      overflow-y: auto; word-break: break-word; white-space: pre-wrap;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      color: #2d3142; background: #faf9f7; cursor: text;
+    }
+    .input-field-rich:focus {
+      border-color: #5a7ba2; background: white;
+      box-shadow: 0 0 0 3px rgba(90,123,162,0.1);
+    }
+    .input-field-rich[contenteditable="false"] {
+      background: #f5f4f1; cursor: not-allowed; opacity: 0.6;
+    }
+    .input-field-rich:empty::before {
+      content: attr(data-placeholder);
+      color: #b0aba5; pointer-events: none;
+    }
+    .send-btn {
+      width: 34px; height: 34px; border-radius: 8px; background: #3a4f6e;
+      border: none; color: white; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+      transition: all 0.2s; flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) { background: #2c3e55; box-shadow: 0 2px 6px rgba(44,62,85,0.3); }
+    .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .continue-btn {
+      padding: 6px 13px; background: none; border: 1px solid #c8d5e3;
+      color: #5a7ba2; border-radius: 8px; font-size: 11px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all 0.15s; flex-shrink: 0; white-space: nowrap;
+    }
+    .continue-btn:hover { background: #edf1f6; border-color: #5a7ba2; }
+
+    /* ── Modals ── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(20,24,36,0.5);
+      display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px;
+    }
+    .modal {
+      background: white; border-radius: 14px; padding: 26px 30px;
+      width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18); border: 1px solid #e2e0db;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: #2d3142; margin-bottom: 20px; }
+    .modal-desc { font-size: 12px; color: #6b7280; margin-bottom: 16px; line-height: 1.6; }
+    .form-field { margin-bottom: 15px; }
+    .form-label {
+      font-size: 10px; font-weight: 700; color: #9ca3af; margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;
+    }
+    .optional-badge {
+      font-size: 9px; background: #f0efec; color: #9ca3af; padding: 1px 6px;
+      border-radius: 4px; font-weight: 600; text-transform: none; letter-spacing: 0;
+    }
+    .form-input {
+      width: 100%; padding: 8px 12px; border: 1.5px solid #d1cdc6;
+      border-radius: 8px; font-size: 13px; font-family: inherit; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s; background: #faf9f7; color: #2d3142;
+    }
+    .form-input:focus { border-color: #5a7ba2; background: white; box-shadow: 0 0 0 3px rgba(90,123,162,0.1); }
+    .form-textarea { min-height: 72px; resize: vertical; line-height: 1.6; }
+    .color-row { display: flex; gap: 7px; flex-wrap: wrap; }
+    .color-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2.5px solid transparent; transition: border-color 0.15s; }
+    .color-dot.selected { border-color: #2d3142; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+    .btn-primary {
+      padding: 8px 20px; background: #3a4f6e; color: white; border: none;
+      border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+      font-family: inherit; transition: all 0.2s;
+    }
+    .btn-primary:hover { background: #2c3e55; box-shadow: 0 2px 6px rgba(44,62,85,0.25); }
+    .btn-secondary {
+      padding: 8px 20px; background: none; color: #5a7ba2;
+      border: 1.5px solid #d1cdc6; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: #5a7ba2; background: #edf1f6; }
+
+    /* Power slider in modal */
+    .power-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .power-val-badge {
+      font-size: 15px; font-weight: 800; min-width: 38px; text-align: center;
+      padding: 2px 0;
+    }
+    .power-desc-text { font-size: 11px; color: #6b7280; }
+    .power-track {
+      flex: 1; min-width: 140px; height: 5px; border-radius: 3px;
+      background: linear-gradient(to right, #c2766a, #d4a574, #d1cdc6, #7a9e8a, #4a7a63);
+      position: relative; cursor: pointer; margin: 0 4px;
+    }
+    .power-thumb {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 13px; height: 13px; border-radius: 50%; background: white;
+      border: 2px solid #5a7ba2; box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+      transition: left 0.1s;
+    }
+
+    /* Fork modal */
+    .fork-preview-box {
+      background: #f7f6f3; border-radius: 8px; padding: 10px 13px;
+      border-left: 3px solid #c9a96e; font-size: 12px; color: #6b7280;
+      margin-bottom: 14px; line-height: 1.5;
+    }
+    .api-link { color: #5a7ba2; text-decoration: none; font-weight: 600; }
+    .api-link:hover { text-decoration: underline; }
+
+    /* Avatar */
+    .avatar {
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; flex-shrink: 0; line-height: 1;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  // ─── Constants ───────────────────────────────────────────────────────────────
+  const COLORS = [
+    '#1976D2','#2E7D32','#C62828','#6A1B9A','#E65100',
+    '#00695C','#AD1457','#4E342E','#004D40','#37474F',
+    '#283593','#558B2F'
+  ];
+
+  const DEFAULT_EXPERTS = [
+    {
+      id:'e1', name:'',
+      role:'産業・経営リーダー (Industrial Titan)',
+      description:'資本の投下と社会実装の責任を担う。供給側のエージェントとして、利益と生存戦略に基づいて動く力を代表する。',
+      color:COLORS[0], power:0
+    },
+    {
+      id:'e2', name:'',
+      role:'労働・ギグワーカー代表 (Labor & Dignity)',
+      description:'現場の労働環境、賃金、AIによる代替への抵抗を訴える。「人的資本」の提供者。この層の合意がないと、生産性の低下や社会的摩擦が発生する。',
+      color:COLORS[1], power:0
+    },
+    {
+      id:'e3', name:'',
+      role:'法・ガバナンス設計者 (The Architect of Rules)',
+      description:'憲法、国際法、コンプライアンスの策定を担う。システムの「制約条件（Constraints）」を記述し、ルールの枠組みを定義する役割。',
+      color:COLORS[2], power:0
+    },
+    {
+      id:'e4', name:'',
+      role:'情報・ナラティブ・アーキテクト (Media & Narrative)',
+      description:'情報拡散、世論形成、認知戦の管理を担う。どんなに正しい政策も、情報の伝え方一つで「デマ」や「拒絶」に遭い、失敗することをシミュレートする。',
+      color:COLORS[3], power:0
+    },
+    {
+      id:'e5', name:'',
+      role:'地政学ストラテジスト (Geopolitical Navigator)',
+      description:'国家間のパワーバランスと安全保障を担う。外部環境の「ショック（紛争、分断）」を議論に持ち込み、システムのレジリエンスを試す。',
+      color:COLORS[4], power:0
+    },
+    {
+      id:'e6', name:'',
+      role:'地球システム科学者 (Biosphere Proxy)',
+      description:'プラネタリー・バウンダリー（地球の限界）を代弁する。人間社会の外部にある「物理的な限界」を突きつける、非交渉的な「自然」の代理人。',
+      color:COLORS[5], power:0
+    },
+    {
+      id:'e7', name:'',
+      role:'AI・先端技術ガバナンス (Tech Evolutionist)',
+      description:'技術の進歩予測と技術的安全性（アライメント）の確保を担う。指数関数的な変化（技術特異点など）を議論に投入し、既存システムを「揺さぶる」役割。',
+      color:COLORS[6], power:0
+    },
+    {
+      id:'e8', name:'',
+      role:'消費者・市民生活者代表 (The Mainstream Agent)',
+      description:'日々の購買行動、生活実感、流行を代表する。経済の「需要側」であり、「合理的でない個人の行動」を代表する。大衆が「納得」して買うか、使うかがビジネスの成否を分ける。',
+      color:COLORS[7], power:0
+    },
+    {
+      id:'e9', name:'',
+      role:'文明歴史学者・哲学者 (Historical Wisdom)',
+      description:'過去の失敗からの学習と価値判断の軸（北極星）を提供する。短期的な利益最適化に陥るエージェントに対し、数世紀単位の「長期的安定性」というパラメーターを与える。',
+      color:COLORS[8], power:0
+    },
+    {
+      id:'e10', name:'',
+      role:'未来世代・ユース代表 (Future Stakeholder)',
+      description:'30年〜50年後の権利を主張する。現在の利益が未来を「略奪」していないかを問い、シミュレーションの時間軸を伸ばすための必須ロール。',
+      color:COLORS[9], power:0
+    },
+    {
+      id:'e11', name:'',
+      role:'グローバル・サウス / 疎外層代表 (Inclusion Advocate)',
+      description:'既存のパワー構造（欧米・富裕層）の外側の視点を代表する。システムの「脆弱性（格差）」を体現し、ここを無視すると世界規模の不安定化を招くことを示す。',
+      color:COLORS[10], power:0
+    },
+    {
+      id:'e12', name:'',
+      role:'インパクト・フィナンシェ (Capital Alchemist)',
+      description:'資金の還流と新しい経済指標の導入を担う。理想（環境・社会）と現実（利益）を「投資」という手段でつなぎ合わせる、変換器の役割。',
+      color:COLORS[11], power:0
+    },
+  ];
+
+  const LEVEL_MAP   = { general:'一般向け', intermediate:'中級', advanced:'専門家向け' };
+  const INTENS_MAP  = { calm:'冷静', moderate:'普通', heated:'白熱' };
+
+  // 利用可能なモデル一覧
+  const MODELS = [
+    { id:'gemini-2.5-flash-preview-05-20', label:'Gemini 2.5 Flash (推奨)', note:'無料: 5 RPM / 20 RPD' },
+    { id:'gemini-2.5-pro-preview-05-06',   label:'Gemini 2.5 Pro',          note:'無料: 2 RPM / 50 RPD' },
+    { id:'gemini-2.0-flash',               label:'Gemini 2.0 Flash',        note:'有料プラン向け' },
+    { id:'gemini-2.0-flash-lite',          label:'Gemini 2.0 Flash Lite',   note:'有料プラン向け' },
+    { id:'gemini-1.5-flash',               label:'Gemini 1.5 Flash',        note:'旧モデル' },
+    { id:'gemini-1.5-pro',                 label:'Gemini 1.5 Pro',          note:'旧モデル' },
+  ];
+
+  const ts  = () => Date.now();
+  const uid = () => Math.random().toString(36).slice(2);
+  const fmtTime = (t) => { const d=new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+
+  // Display name: use set name, or first part of role (before parenthesis)
+  const dispName = (e) => {
+    if (!e) return '?';
+    if (e.name?.trim()) return e.name.trim();
+    return e.role?.split(' (')[0] || e.role || '?';
+  };
+
+  // Initials for avatar
+  const initials = (e) => {
+    if (e?.name?.trim()) return e.name.trim().charAt(0);
+    return (e?.role || '？').charAt(0);
+  };
+
+  // Power color
+  const powerColor = (p) => p > 0 ? '#4a7a63' : p < 0 ? '#c2766a' : '#9ca3af';
+  const powerLabel = (p) => {
+    if (p >= 8) return '支配的';
+    if (p >= 4) return '強め';
+    if (p >= 1) return 'やや強';
+    if (p === 0) return '平等';
+    if (p >= -3) return 'やや弱';
+    if (p >= -7) return '弱め';
+    return '周縁的';
+  };
+  const powerPrompt = (p) => {
+    if (p === 0) return '';
+    if (p >= 8) return `【発言力・影響力: +${p}（非常に強い）】あなたはこの会議において圧倒的な発言力を持つ。積極的に議論をリードし、他の参加者に強い影響を与え、必要なら場を支配してよい。`;
+    if (p >= 4) return `【発言力・影響力: +${p}（強め）】あなたはこの会議において発言力が強い。自信を持って主張し、他の意見に積極的に反論・誘導してよい。`;
+    if (p >= 1) return `【発言力・影響力: +${p}（やや強め）】あなたはこの会議においてやや発言力が強い。自分の意見を積極的に前に出してよい。`;
+    if (p >= -3) return `【発言力・影響力: ${p}（やや弱め）】あなたはこの会議において発言力がやや低い。控えめだが的確に意見を述べ、強い参加者の意見を尊重しながら専門的視点を添えよ。`;
+    if (p >= -7) return `【発言力・影響力: ${p}（弱め）】あなたはこの会議において発言力が低い。謙虚に、しかし着実に意見を述べよ。強い参加者の意見の流れに配慮すること。`;
+    return `【発言力・影響力: ${p}（非常に弱い/周縁的）】あなたはこの会議において非常に弱い立場にある。慎重かつ謙虚に発言し、強い参加者の意見に押されることもある。それでも自分のロールの核心は主張すること。`;
+  };
+
+  // ─── Components ──────────────────────────────────────────────────────────────
+
+  const Av = ({ expert, size=32 }) => (
+    <div className="avatar" style={{ width:size, height:size, background:expert?.color||'#9aa0a6', fontSize:Math.floor(size*0.4) }}>
+      {initials(expert)}
+    </div>
+  );
+
+  // ─── ExpertModal ──────────────────────────────────────────────────────────────
+  const ExpertModal = ({ expert, onSave, onClose, onDelete }) => {
+    const isNew = !expert;
+    const [f, setF] = useState(expert || { id:`e${uid()}`, name:'', role:'', description:'', color:COLORS[0], power:0 });
+    const ok = f.role.trim();
+    const pct = ((f.power + 10) / 20) * 100;
+
+    return (
+      <div className="overlay" onClick={onClose}>
+        <div className="modal" onClick={e=>e.stopPropagation()}>
+          <div className="modal-title">{isNew ? '専門家を追加' : 'ロールを編集'}</div>
+
+          {/* Name (optional) */}
+          <div className="form-field">
+            <div className="form-label">
+              名前 <span className="optional-badge">任意</span>
+            </div>
+            <input className="form-input" value={f.name} onChange={e=>setF({...f,name:e.target.value})}
+              placeholder="空白の場合はロール名で表示されます" />
+          </div>
+
+          {/* Role */}
+          <div className="form-field">
+            <div className="form-label">ロール名・肩書き <span style={{color:'#d93025',fontSize:10}}>必須</span></div>
+            <input className="form-input" value={f.role} onChange={e=>setF({...f,role:e.target.value})}
+              placeholder="例: 地政学ストラテジスト (Geopolitical Navigator)" />
+          </div>
+
+          {/* Description */}
+          <div className="form-field">
+            <div className="form-label">ロールの役割・立場の説明</div>
+            <textarea className="form-input form-textarea" value={f.description}
+              onChange={e=>setF({...f,description:e.target.value})}
+              placeholder="このロールが議論で担う役割・立場・視点を記述します。AIへのプロンプトとして使われます。" />
+          </div>
+
+          {/* Power */}
+          <div className="form-field">
+            <div className="form-label">発言力・影響力 <span style={{fontSize:9,color:'#9aa0a6',fontWeight:500,textTransform:'none',letterSpacing:0}}>&nbsp;−10〜+10（デフォルト:0=平等）</span></div>
+            <div className="power-ctrl">
+              <button className="round-btn" style={{flexShrink:0}} onClick={()=>setF({...f,power:Math.max(-10,f.power-1)})}>−</button>
+              <div className="power-track" style={{flex:1}}>
+                <div className="power-thumb" style={{left:`${pct}%`}} />
+              </div>
+              <button className="round-btn" style={{flexShrink:0}} onClick={()=>setF({...f,power:Math.min(10,f.power+1)})}>+</button>
+              <span className="power-val-badge" style={{color:powerColor(f.power)}}>
+                {f.power>0?`+${f.power}`:f.power}
+              </span>
+              <span className="power-desc-text">{powerLabel(f.power)}</span>
+            </div>
+          </div>
+
+          {/* Color */}
+          <div className="form-field">
+            <div className="form-label">カラー</div>
+            <div className="color-row">
+              {COLORS.map(c=><div key={c} className={`color-dot${f.color===c?' selected':''}`} style={{background:c}} onClick={()=>setF({...f,color:c})} />)}
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            {!isNew && onDelete && (
+              <button className="btn-secondary" style={{color:'#d93025',borderColor:'#f28b82',marginRight:'auto'}} onClick={()=>onDelete(f.id)}>削除</button>
+            )}
+            <button className="btn-secondary" onClick={onClose}>キャンセル</button>
+            <button className="btn-primary" style={{opacity:ok?1:0.5}} onClick={()=>ok&&onSave(f)}>保存</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── ApiKeyModal ──────────────────────────────────────────────────────────────
+  const ApiKeyModal = ({ onSave, onClose }) => {
+    const [k, setK] = useState('');
+    return (
+      <div className="overlay">
+        <div className="modal">
+          <div className="modal-title">🔑 Gemini APIキーを設定</div>
+          <p className="modal-desc">Google AI Studio（無料）でAPIキーを取得してください。<br/>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="api-link">→ aistudio.google.com でAPIキーを取得</a>
+          </p>
+          <div className="form-field">
+            <div className="form-label">APIキー</div>
+            <input className="form-input" type="password" value={k} onChange={e=>setK(e.target.value)} placeholder="AIza..." />
+          </div>
+          <div className="modal-actions">
+            {onClose && <button className="btn-secondary" onClick={onClose}>キャンセル</button>}
+            <button className="btn-primary" onClick={()=>k.trim()&&onSave(k.trim())}>保存</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── ForkModal ────────────────────────────────────────────────────────────────
+  const ForkModal = ({ message, expert, onFork, onClose }) => {
+    const [msg, setMsg] = useState('');
+    return (
+      <div className="overlay" onClick={onClose}>
+        <div className="modal" onClick={e=>e.stopPropagation()}>
+          <div className="modal-title">🔀 この時点から分岐</div>
+          <div className="fork-preview-box">
+            <strong>{dispName(expert)}:</strong> {message.content.slice(0,90)}{message.content.length>90?'…':''}
+          </div>
+          <p className="modal-desc">この発言の直後から新しい議論の流れを作ります。元の会話は別ブランチとして保存されます。</p>
+          <div className="form-field">
+            <div className="form-label">あなたの介入メッセージ <span className="optional-badge">任意</span></div>
+            <textarea className="form-input form-textarea" value={msg} onChange={e=>setMsg(e.target.value)}
+              placeholder="新しい切り口・質問・制約を追加（空白でも分岐できます）" style={{minHeight:72}} />
+          </div>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={onClose}>キャンセル</button>
+            <button className="btn-primary" onClick={()=>onFork(msg)}>🔀 分岐して続ける</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── MessageCard ─────────────────────────────────────────────────────────────
+  const MsgCard = ({ msg, expert, isUser, onFork }) => (
+    <div className={`msg-card${isUser?' user-msg':''}`} style={expert?{borderLeftColor:expert.color}:{}}>
+      <div className="msg-head">
+        {isUser
+          ? <div className="avatar" style={{width:28,height:28,background:'#3a4f6e',fontSize:12}}>あ</div>
+          : <Av expert={expert} size={28}/>
+        }
+        <div className="msg-meta">
+          <span className="msg-name">{isUser?'あなた':dispName(expert)}</span>
+          {!isUser && expert && <span className="msg-role-label"> · {expert.role.split(' (')[0]}</span>}
+          <span className="msg-time">{fmtTime(msg.timestamp)}</span>
+        </div>
+        {!isUser && expert && expert.power !== 0 && (
+          <span className="power-badge" style={{background: expert.power>0?'#e8f0fe':'#fff3e0', color:powerColor(expert.power)}}>
+            {expert.power>0?`+${expert.power}`:expert.power}
+          </span>
+        )}
+      </div>
+      <div className="msg-body">{msg.content}</div>
+      {!isUser && onFork && (
+        <div className="msg-actions">
+          <button className="msg-action-btn" onClick={()=>onFork(msg)}>🔀 ここから分岐</button>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── TypingIndicator ─────────────────────────────────────────────────────────
+  const TypingIndicator = ({ expert }) => (
+    <div className="typing-card" style={expert?{borderLeftColor:expert.color}:{}}>
+      <Av expert={expert} size={26}/>
+      <span className="typing-name">{dispName(expert)} が入力中</span>
+      <div className="dots"><div className="dot"/><div className="dot"/><div className="dot"/></div>
+    </div>
+  );
+
+  // ─── App ─────────────────────────────────────────────────────────────────────
+  const App = () => {
+    const [apiKey, setApiKey]   = useState(()=>localStorage.getItem('eds_key')||'');
+    const [experts, setExperts] = useState(DEFAULT_EXPERTS);
+    const [topic, setTopic]     = useState('');
+    const [isStarted, setIsStarted] = useState(false);
+    const [isGen, setIsGen]         = useState(false);
+    const [genExpert, setGenExpert] = useState(null);
+    const [branches, setBranches]   = useState([]);
+    const [curBranch, setCurBranch] = useState(null);
+    const [settings, setSettings]   = useState({
+      level:'advanced', intensity:'moderate', rounds:1,
+      model:'gemini-2.5-flash-preview-05-20',
+      reqDelay:13,   // リクエスト間隔（秒）。無料Gemini 2.5 Flash = 5 RPM → 13s推奨
+    });
+    const [retryCountdown, setRetryCountdown] = useState(0); // リトライ待機カウントダウン
+    const [inputHasContent, setInputHasContent] = useState(false);
+    const [error, setError]         = useState(null);
+    const [forkData, setForkData]   = useState(null);
+    const [showApi, setShowApi]     = useState(false);
+    const [expertModal, setExpertModal] = useState(null);
+
+    const endRef       = useRef(null);
+    const inputDivRef  = useRef(null);
+    const isGenRef     = useRef(false);
+    const workingMsgs  = useRef({});
+    const expertsRef   = useRef(experts);
+    const settingsRef  = useRef(settings);
+    const topicRef     = useRef(topic);
+
+    useEffect(()=>{ expertsRef.current = experts; }, [experts]);
+    useEffect(()=>{ settingsRef.current = settings; }, [settings]);
+    useEffect(()=>{ topicRef.current = topic; }, [topic]);
+    useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [branches, isGen]);
+
+    const currentBranch = branches.find(b=>b.id===curBranch);
+    const messages = currentBranch?.messages || [];
+
+    const initBranch = (id, base=[]) => { workingMsgs.current[id] = [...base]; };
+    const getMsgs    = (id) => workingMsgs.current[id] || [];
+
+    const pushMsg = (branchId, msg) => {
+      workingMsgs.current[branchId] = [...(workingMsgs.current[branchId]||[]), msg];
+      setBranches(prev=>prev.map(b=>b.id===branchId?{...b,messages:[...workingMsgs.current[branchId]]}:b));
+    };
+
+    // ── Gemini API（リトライ付き）────────────────────────────────────────────
+    const callGemini = async (prompt, temp=0.75, attempt=0) => {
+      const model = settingsRef.current.model || 'gemini-2.5-flash-preview-05-20';
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        { method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:temp,maxOutputTokens:550,topP:0.9} }) }
+      );
+      if (!res.ok) {
+        const errData = await res.json().catch(()=>({}));
+        const msg = errData?.error?.message || `APIエラー (${res.status})`;
+
+        // レートリミット（429）: エラーメッセージから待機秒数をパースしてリトライ
+        if (res.status === 429 && attempt < 4) {
+          const secsMatch = msg.match(/retry in (\d+(?:\.\d+)?)s/i);
+          const waitSec = secsMatch ? Math.ceil(parseFloat(secsMatch[1])) + 2 : Math.min(60, 15 * (attempt + 1));
+          // カウントダウン表示
+          for (let s = waitSec; s > 0; s--) {
+            if (!isGenRef.current) return '';
+            setRetryCountdown(s);
+            await new Promise(r => setTimeout(r, 1000));
+          }
+          setRetryCountdown(0);
+          return callGemini(prompt, temp, attempt + 1);
+        }
+        throw new Error(msg);
+      }
+      const d = await res.json();
+      return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    };
+
+    // ── Prompt builder ────────────────────────────────────────────────────────
+    const buildPrompt = (expert, history, topicStr, cfg) => {
+      const lvl  = {general:'一般の方にも分かるよう専門用語を最小限に', intermediate:'中級者向けに適度な専門用語を交えて', advanced:'専門家同士の高水準な議論として'}[cfg.level];
+      const itns = {calm:'冷静・客観的に、感情を排した論理で', moderate:'適度な熱量と建設的な姿勢で', heated:'情熱的かつ対立的に、積極的に他の意見と衝突しながら'}[cfg.intensity];
+      const pCtx = powerPrompt(expert.power||0);
+      const hist = history.map(m=>{
+        if(m.type==='user') return `[ユーザー]: ${m.content}`;
+        const e=expertsRef.current.find(x=>x.id===m.expertId);
+        return `[${dispName(e)}(${e?.role?.split(' (')[0]||''})]: ${m.content}`;
+      }).join('\n\n');
+      return `これは「世界会議・社会シミュレーション」です。あなたは以下のロールとして参加します。
+
+ロール: ${expert.role}
+${expert.name?.trim()?`代表者名: ${expert.name.trim()}\n`:''}このロールの役割・立場: ${expert.description}
+${pCtx ? '\n' + pCtx : ''}
+【議論ルール】
+- ${lvl}発言する
+- ${itns}発言する
+- 他の参加者の発言を受けて、自分のロールの立場から新たな論点・視点・反論・提案を加える
+- 200〜380文字程度で簡潔かつ鋭く発言する
+- 文頭に自分の名前やロール名を書かない
+- 必ず日本語のみで回答する
+
+【議題】
+${topicStr}
+
+【これまでの議論】
+${hist || '（議論開始）'}
+
+${dispName(expert)}の発言:`;
+    };
+
+    // ── Generate one expert ───────────────────────────────────────────────────
+    const genOne = async (expert, branchId, history, cfg, isFirst=false) => {
+      setGenExpert(expert);
+      // リクエスト間隔：最初は短く、2回目以降は設定値を適用してRPMを超えないようにする
+      const delaySec = isFirst ? 0.4 : (cfg.reqDelay ?? 1);
+      await new Promise(r=>setTimeout(r, delaySec * 1000));
+      if(!isGenRef.current) return null;
+      const temp = cfg.intensity==='calm'?0.42:cfg.intensity==='heated'?0.93:0.72;
+      const content = await callGemini(buildPrompt(expert, history, topicRef.current, cfg), temp);
+      if(!content) throw new Error('空のレスポンスが返されました');
+      const msg = { id:`m${uid()}`, type:'expert', expertId:expert.id, content, timestamp:ts() };
+      pushMsg(branchId, msg);
+      setGenExpert(null);
+      return msg;
+    };
+
+    // ── Run rounds ────────────────────────────────────────────────────────────
+    const runRounds = async (branchId, numRounds) => {
+      const cfg  = settingsRef.current;
+      const exps = expertsRef.current;
+      let isFirst = true;
+      for(let r=0; r<numRounds; r++){
+        for(let i=0; i<exps.length; i++){
+          if(!isGenRef.current) return;
+          await genOne(exps[i], branchId, getMsgs(branchId), cfg, isFirst);
+          isFirst = false;
+        }
+      }
+    };
+
+    // ── Start discussion ──────────────────────────────────────────────────────
+    const handleStart = async () => {
+      if(!topic.trim()) return;
+      if(!apiKey){ setShowApi(true); return; }
+      const id = `branch-main-${uid()}`;
+      initBranch(id);
+      setBranches([{ id, name:'本流', parentId:null, messages:[] }]);
+      setCurBranch(id);
+      setIsStarted(true); setIsGen(true); isGenRef.current=true; setError(null);
+      try { await runRounds(id, settings.rounds); }
+      catch(e){ setError(e.message); }
+      finally { setIsGen(false); isGenRef.current=false; setGenExpert(null); }
+    };
+
+    // ── User sends message ────────────────────────────────────────────────────
+    const handleSend = async () => {
+      const text = inputDivRef.current?.innerText?.trim() || '';
+      if(!text||!curBranch||isGen) return;
+      // Clear the contentEditable div
+      if(inputDivRef.current){ inputDivRef.current.innerText = ''; }
+      setInputHasContent(false);
+      const um = { id:`m${uid()}`, type:'user', expertId:null, content:text, timestamp:ts() };
+      pushMsg(curBranch, um);
+      setIsGen(true); isGenRef.current=true; setError(null);
+      try { await runRounds(curBranch, 1); }
+      catch(e){ setError(e.message); }
+      finally { setIsGen(false); isGenRef.current=false; setGenExpert(null); }
+    };
+
+    // ── Continue ──────────────────────────────────────────────────────────────
+    const handleContinue = async () => {
+      if(!curBranch||isGen) return;
+      setIsGen(true); isGenRef.current=true; setError(null);
+      try { await runRounds(curBranch, 1); }
+      catch(e){ setError(e.message); }
+      finally { setIsGen(false); isGenRef.current=false; setGenExpert(null); }
+    };
+
+    // ── Fork ──────────────────────────────────────────────────────────────────
+    const handleFork = async (message, userMsg) => {
+      setForkData(null);
+      if(!curBranch) return;
+      const baseMsgs = getMsgs(curBranch);
+      const idx = baseMsgs.findIndex(m=>m.id===message.id);
+      const sliced = baseMsgs.slice(0, idx+1);
+      const forkNum = branches.filter(b=>b.parentId!==null).length+1;
+      const id = `branch-fork-${uid()}`;
+      initBranch(id, sliced);
+      setBranches(prev=>[...prev, { id, name:`分岐 ${forkNum}`, parentId:curBranch, messages:[...sliced] }]);
+      setCurBranch(id);
+      if(userMsg?.trim()){
+        const um = { id:`m${uid()}`, type:'user', expertId:null, content:userMsg.trim(), timestamp:ts() };
+        pushMsg(id, um);
+      }
+      setIsGen(true); isGenRef.current=true; setError(null);
+      try { await runRounds(id, settings.rounds); }
+      catch(e){ setError(e.message); }
+      finally { setIsGen(false); isGenRef.current=false; setGenExpert(null); }
+    };
+
+    // ── Expert CRUD ───────────────────────────────────────────────────────────
+    const saveExpert = (data) => {
+      setExperts(prev=>prev.find(e=>e.id===data.id)?prev.map(e=>e.id===data.id?data:e):[...prev,data]);
+      setExpertModal(null);
+    };
+    const delExpert = (id) => {
+      if(experts.length>1){ setExperts(prev=>prev.filter(e=>e.id!==id)); setExpertModal(null); }
+    };
+
+    // ── Reset ─────────────────────────────────────────────────────────────────
+    const handleReset = () => {
+      setIsStarted(false); setTopic(''); setBranches([]); setCurBranch(null);
+      setError(null); isGenRef.current=false; setIsGen(false); setGenExpert(null);
+    };
+
+    const levelLabel = LEVEL_MAP[settings.level];
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    return (
+      <div className="app">
+
+        {/* TopBar */}
+        <div className="topbar">
+          <div className="topbar-left">
+            <div className="topbar-logo">EDS</div>
+            <div>
+              <div className="topbar-title">Expert Discussion Studio</div>
+              <div className="topbar-subtitle">世界会議・社会シミュレーション討論プラットフォーム</div>
+            </div>
+          </div>
+          <div className="topbar-right">
+            {isStarted && <span className="topbar-chip">{levelLabel} · {INTENS_MAP[settings.intensity]}</span>}
+            <button className="icon-btn" title="APIキー設定" onClick={()=>setShowApi(true)}>🔑</button>
+            {isStarted && <button className="icon-btn" title="新しい議論" onClick={handleReset}>🏠</button>}
+          </div>
+        </div>
+
+        {/* Main Layout */}
+        <div className="main-layout">
+
+          {/* Sidebar */}
+          <div className="sidebar">
+            <div className="sidebar-section">
+              <div className="sidebar-title">精鋭ロール ({experts.length})</div>
+              {experts.map(exp=>(
+                <div className="expert-item" key={exp.id}>
+                  <Av expert={exp} size={30}/>
+                  <div className="expert-info">
+                    <div className="expert-dname">{dispName(exp)}</div>
+                    <div className="expert-role-small">{exp.role.split(' (')[0]}</div>
+                  </div>
+                  {exp.power !== 0 && (
+                    <span className="power-badge" style={{background:exp.power>0?'#e8f0fe':'#fff3e0',color:powerColor(exp.power)}}>
+                      {exp.power>0?`+${exp.power}`:exp.power}
+                    </span>
+                  )}
+                  <button className="expert-edit-btn" onClick={()=>setExpertModal(exp)}>✏️</button>
+                </div>
+              ))}
+              <button className="add-expert-btn" onClick={()=>setExpertModal('new')}>＋ ロールを追加</button>
+            </div>
+
+            <div className="sidebar-section">
+              <div className="sidebar-title">議論の設定</div>
+              <div className="setting-item">
+                <div className="setting-label">難易度レベル</div>
+                <div className="chip-group">
+                  {[['general','一般'],['intermediate','中級'],['advanced','専門家']].map(([v,l])=>(
+                    <button key={v} className={`chip${settings.level===v?' active':''}`} onClick={()=>setSettings(s=>({...s,level:v}))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="setting-item">
+                <div className="setting-label">温度感</div>
+                <div className="chip-group">
+                  {[['calm','冷静'],['moderate','普通'],['heated','白熱']].map(([v,l])=>(
+                    <button key={v} className={`chip${settings.intensity===v?' active':''}`} onClick={()=>setSettings(s=>({...s,intensity:v}))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="setting-item">
+                <div className="setting-label">自動ラウンド数</div>
+                <div className="round-ctrl">
+                  <button className="round-btn" onClick={()=>setSettings(s=>({...s,rounds:Math.max(1,s.rounds-1)}))}>−</button>
+                  <span className="round-val">{settings.rounds}</span>
+                  <button className="round-btn" onClick={()=>setSettings(s=>({...s,rounds:Math.min(5,s.rounds+1)}))}>+</button>
+                  <span style={{fontSize:10,color:'#9ca3af'}}>ラウンド</span>
+                </div>
+              </div>
+
+              {/* ── モデル選択 ── */}
+              <div className="setting-item">
+                <div className="setting-label">モデル</div>
+                <select
+                  value={settings.model}
+                  onChange={e=>setSettings(s=>({...s,model:e.target.value}))}
+                  style={{
+                    width:'100%', padding:'5px 8px', borderRadius:7,
+                    border:'1px solid #d1cdc6', fontSize:11, fontFamily:'inherit',
+                    background:'white', color:'#374151', outline:'none', cursor:'pointer',
+                  }}
+                >
+                  {MODELS.map(m=>(
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+                <div style={{fontSize:9,color:'#9ca3af',marginTop:3}}>
+                  {MODELS.find(m=>m.id===settings.model)?.note}
+                </div>
+              </div>
+
+              {/* ── リクエスト間隔 ── */}
+              <div className="setting-item">
+                <div className="setting-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span>リクエスト間隔</span>
+                  <span style={{fontWeight:700,color:'#5a7ba2'}}>{settings.reqDelay}秒</span>
+                </div>
+                <input
+                  type="range" min={1} max={30} step={1}
+                  value={settings.reqDelay}
+                  onChange={e=>setSettings(s=>({...s,reqDelay:parseInt(e.target.value)}))}
+                  style={{width:'100%',accentColor:'#5a7ba2',margin:'3px 0'}}
+                />
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#9ca3af'}}>
+                  <span>1秒（有料）</span>
+                  <span>13秒（無料推奨）</span>
+                  <span>30秒</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="content-area">
+            {!isStarted ? (
+              /* ── Landing ── */
+              <div className="landing">
+                <div className="landing-card">
+                  <div className="landing-icon">🌐</div>
+                  <div className="landing-title">世界会議をシミュレート</div>
+                  <div className="landing-sub">
+                    12の精鋭ロールが、あなたが設定したテーマについて<br/>それぞれの立場から多角的に議論を展開します
+                  </div>
+                  <div className="role-preview-grid">
+                    {experts.slice(0,12).map(e=>(
+                      <div className="role-preview-item" key={e.id}>
+                        <div className="avatar" style={{width:18,height:18,background:e.color,fontSize:9,flexShrink:0}}>{initials(e)}</div>
+                        <span className="role-preview-name">{e.role.split(' (')[0]}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <textarea className="topic-textarea" value={topic} onChange={e=>setTopic(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))handleStart();}}
+                    placeholder="例: AGIの出現は2030年までに起こりうるか。各ロールの立場から議論せよ。" />
+                  <div className="hint-text">Ctrl+Enter で開始 · サイドバーでロール編集・発言力調整ができます</div>
+                  <button className="start-btn" onClick={handleStart} disabled={!topic.trim()}>
+                    世界会議を開始する →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── Discussion ── */
+              <div className="discussion-view">
+
+                {/* Topic bar */}
+                <div className="topic-bar">
+                  <span className="topic-bar-label">議題</span>
+                  <span className="topic-bar-text">{topic}</span>
+                  <span className="topic-bar-badge">{levelLabel}</span>
+                  <span className="topic-bar-badge" style={{background:'#f5ede8',color:'#a05a4a',borderColor:'#ddb89a'}}>{INTENS_MAP[settings.intensity]}</span>
+                </div>
+
+                {/* Branch tabs */}
+                {branches.length > 1 && (
+                  <div className="branch-tabs">
+                    {branches.map(b=>(
+                      <button key={b.id} className={`branch-tab${curBranch===b.id?' active':''}`} onClick={()=>setCurBranch(b.id)}>
+                        {b.parentId?'🔀 ':'📌 '}{b.name}
+                        <span className="branch-count">({b.messages.length})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Error */}
+                {error && (
+                  <div className="error-banner">
+                    ⚠️ {error}
+                    <button className="error-close" onClick={()=>setError(null)}>✕</button>
+                  </div>
+                )}
+                {/* リトライカウントダウン */}
+                {retryCountdown > 0 && (
+                  <div style={{
+                    background:'#f5f0e8', borderBottom:'1px solid #e6d5b8', color:'#8a6a2e',
+                    padding:'8px 16px', fontSize:12, display:'flex', alignItems:'center', gap:8, flexShrink:0,
+                  }}>
+                    ⏳ レートリミット到達。<strong>{retryCountdown}秒</strong>後に自動リトライします…
+                    <div style={{flex:1,height:3,background:'#e6d5b8',borderRadius:2,overflow:'hidden'}}>
+                      <div style={{height:'100%',background:'#c9a96e',borderRadius:2,transition:'width 1s linear',width:`${(retryCountdown/60)*100}%`}}/>
+                    </div>
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div className="messages-scroll">
+                  {messages.map(msg=>{
+                    const expert = msg.type==='expert' ? experts.find(e=>e.id===msg.expertId) : null;
+                    return (
+                      <MsgCard key={msg.id} msg={msg} expert={expert} isUser={msg.type==='user'}
+                        onFork={msg.type==='expert'&&!isGen ? (m)=>setForkData({message:m,expert}) : null}
+                      />
+                    );
+                  })}
+                  {isGen && genExpert && <TypingIndicator expert={genExpert}/>}
+                  <div ref={endRef}/>
+                </div>
+
+                {/* Input bar */}
+                <div className="input-bar">
+                  <span className="input-hint">{isGen?'生成中…':'介入する'}</span>
+                  <div
+                    ref={inputDivRef}
+                    contentEditable={!isGen}
+                    suppressContentEditableWarning
+                    className="input-field-rich"
+                    onKeyDown={e=>{
+                      if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){
+                        e.preventDefault(); handleSend();
+                      }
+                    }}
+                    onInput={e=>setInputHasContent(e.currentTarget.innerText.trim().length>0)}
+                    data-placeholder="議論に参加・方向を変える・制約を投下… (⌘/Ctrl+Enter で送信)"
+                    aria-label="介入メッセージを入力"
+                    spellCheck="false"
+                  />
+                  {!isGen && messages.length>0 && (
+                    <button className="continue-btn" onClick={handleContinue}>続きを生成</button>
+                  )}
+                  <button className="send-btn" onClick={handleSend} disabled={isGen||!inputHasContent}>➤</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modals */}
+        {showApi && (
+          <ApiKeyModal onSave={k=>{localStorage.setItem('eds_key',k);setApiKey(k);setShowApi(false);}} onClose={()=>setShowApi(false)} />
+        )}
+        {expertModal && (
+          <ExpertModal
+            expert={expertModal==='new'?null:expertModal}
+            onSave={saveExpert}
+            onClose={()=>setExpertModal(null)}
+            onDelete={delExpert}
+          />
+        )}
+        {forkData && (
+          <ForkModal message={forkData.message} expert={forkData.expert}
+            onFork={m=>handleFork(forkData.message,m)} onClose={()=>setForkData(null)} />
+        )}
+      </div>
+    );
+  };
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
