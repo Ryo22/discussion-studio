@@ -741,14 +741,31 @@
     const settingsRef  = useRef(settings);
     const topicRef     = useRef(topic);
 
-    const [topicHistory, setTopicHistory] = useState(() => JSON.parse(localStorage.getItem('eds_topic_history') || '[]'));
+    const [sessions, setSessions] = useState(() => JSON.parse(localStorage.getItem('eds_sessions') || '[]'));
+    const [curSessionId, setCurSessionId] = useState(null);
     const abortControllerRef = useRef(null);
 
     useEffect(()=>{ expertsRef.current = experts; }, [experts]);
     useEffect(()=>{ settingsRef.current = settings; }, [settings]);
     useEffect(()=>{ topicRef.current = topic; }, [topic]);
     useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); }, [branches, isGen]);
-    useEffect(()=>{ localStorage.setItem('eds_topic_history', JSON.stringify(topicHistory)); }, [topicHistory]);
+
+    // セッションの永続化
+    useEffect(() => {
+      localStorage.setItem('eds_sessions', JSON.stringify(sessions));
+    }, [sessions]);
+
+    // 現在のセッションを更新する同期UI
+    useEffect(() => {
+      if (!isStarted || !curSessionId) return;
+      setSessions(prev => prev.map(s => s.id === curSessionId ? {
+        ...s,
+        topic,
+        experts,
+        branches,
+        lastActive: ts()
+      } : s));
+    }, [branches, experts, topic, isStarted, curSessionId]);
 
     const currentBranch = branches.find(b=>b.id===curBranch);
     const messages = currentBranch?.messages || [];
@@ -945,13 +962,25 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
     const handleStart = async () => {
       if(!topic.trim()) return;
       if(!apiKey){ setShowApi(true); return; }
-      const id = `branch-main-${uid()}`;
-      initBranch(id);
-      setBranches([{ id, name:'本流', parentId:null, messages:[] }]);
-      setCurBranch(id);
-      if(!topicHistory.includes(topic)) setTopicHistory(prev => [topic, ...prev].slice(0, 10));
+      
+      const sessId = `sess-${uid()}`;
+      const branchId = `branch-main-${uid()}`;
+      const newSess = {
+        id: sessId,
+        topic: topic.trim(),
+        experts: [...experts],
+        branches: [{ id: branchId, name:'本流', parentId:null, messages:[] }],
+        createdAt: ts(),
+        lastActive: ts()
+      };
+
+      setCurSessionId(sessId);
+      setSessions(prev => [newSess, ...prev].slice(0, 15));
+      initBranch(branchId);
+      setBranches(newSess.branches);
+      setCurBranch(branchId);
       setIsStarted(true); setIsGen(true); isGenRef.current=true; setError(null);
-      try { await runTurns(id, settings.rounds); }
+      try { await runTurns(branchId, settings.rounds); }
       catch(e){ setError(e.message); }
       finally { setIsGen(false); isGenRef.current=false; setGenExpert(null); }
     };
@@ -1014,8 +1043,25 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
     // ── Reset ─────────────────────────────────────────────────────────────────
     const handleReset = () => {
       stopTalking();
-      setIsStarted(false); setTopic(''); setBranches([]); setCurBranch(null);
+      setIsStarted(false); setTopic(''); setBranches([]); setCurBranch(null); setCurSessionId(null);
       setError(null); isGenRef.current=false; setIsGen(false); setGenExpert(null);
+    };
+
+    // セッションの読み込み
+    const loadSession = (s) => {
+      if (isGen) return;
+      stopTalking();
+      setTopic(s.topic);
+      setExperts(s.experts);
+      setBranches(s.branches);
+      // ブランチのメッセージデータをworkingMsgsに即時反映
+      s.branches.forEach(b => {
+        workingMsgs.current[b.id] = [...b.messages];
+      });
+      setCurBranch(s.branches[0].id);
+      setCurSessionId(s.id);
+      setIsStarted(true);
+      setError(null);
     };
 
     const stopTalking = () => {
@@ -1195,16 +1241,37 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
               <div style={{fontSize:'12px', color:'#374151', background:'#fff', padding:'8px', borderRadius:'6px', border:'1px solid #e2e0db', marginBottom:'10px', wordBreak:'break-word'}}>
                 {topic || '未設定'}
               </div>
-              {topicHistory.length > 0 && (
+              {sessions.length > 0 && (
                 <>
-                  <div className="sidebar-title" style={{marginTop:'12px'}}>過去の議題</div>
-                  <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
-                    {topicHistory.filter(t => t !== topic).map((t, i) => (
-                      <div key={i} onClick={() => !isGen && setTopic(t)} style={{fontSize:'11px', color:'#6b7280', cursor:isGen ? 'default' : 'pointer', padding:'4px 6px', borderRadius:'4px', border:'1px solid transparent', transition:'all 0.15s', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} className="hist-item">
-                        {t}
+                  <div className="sidebar-title" style={{marginTop:'12px'}}>過去の議題 (履歴)</div>
+                  <div style={{display:'flex', flexDirection:'column', gap:'6px'}}>
+                    {sessions.map((s) => (
+                      <div 
+                        key={s.id} 
+                        onClick={() => loadSession(s)} 
+                        style={{
+                          fontSize:'11px', color: (s.id === curSessionId) ? '#5a7ba2' : '#6b7280', 
+                          cursor:isGen ? 'default' : 'pointer', padding:'6px 8px', borderRadius:'6px', 
+                          border: (s.id === curSessionId) ? '1px solid #c8d5e3' : '1px solid transparent', 
+                          background: (s.id === curSessionId) ? '#f0f4f9' : 'transparent',
+                          transition:'all 0.15s', wordBreak:'break-all'
+                        }} 
+                        className="hist-item"
+                      >
+                        <div style={{fontWeight: (s.id === curSessionId) ? 700 : 500, marginBottom:2}}>{s.topic}</div>
+                        <div style={{fontSize:9, opacity:0.6, display:'flex', justifyContent:'space-between'}}>
+                          <span>{s.branches[0].messages.length} 発言</span>
+                          <span>{new Date(s.lastActive).toLocaleDateString()}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
+                  <button 
+                    onClick={() => { if(confirm('すべての履歴を削除しますか？')) { setSessions([]); handleReset(); }}}
+                    style={{width:'100%', marginTop:12, padding:6, fontSize:9, color:'#9ca3af', background:'none', border:'none', cursor:'pointer'}}
+                  >
+                    🗑️ 全履歴を削除
+                  </button>
                 </>
               )}
             </div>
