@@ -316,6 +316,11 @@
       cursor: pointer; font-family: inherit; transition: all 0.15s; flex-shrink: 0; white-space: nowrap;
     }
     .continue-btn:hover { background: #edf1f6; border-color: #5a7ba2; }
+    .voice-mode-toggle-line { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; border-bottom: 1px solid #f1f1f1; padding-bottom: 5px; }
+    .simple-toggle-btn { background: none; border: 1px solid #d1cdc6; border-radius: 4px; padding: 2px 8px; font-size: 10px; color: #6b7280; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+    .simple-toggle-btn:hover { background: #f3f4f6; color: #374151; }
+    .voice-mini-controls { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .voice-select-minimal { font-size: 10px; border: 1px solid #d1cdc6; border-radius: 4px; padding: 1px 4px; color: #6b7280; background: #faf9f7; outline: none; max-width: 140px; font-family: inherit; }
 
     /* ── Modals ── */
     .overlay {
@@ -742,6 +747,8 @@
     const [voiceMode, setVoiceMode] = useState(false);
     const [voiceSpeed, setVoiceSpeed] = useState(1.0);
     const [isMuted, setIsMuted]     = useState(false);
+    const [availableVoices, setAvailableVoices] = useState([]);
+    const [selectedVoice, setSelectedVoice] = useState('');
 
     const endRef       = useRef(null);
     const inputDivRef  = useRef(null);
@@ -759,24 +766,45 @@
     // 音声合成（読み上げ）
     const speakText = (text, expertId) => {
       if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel(); // 前の発言を止める
+      window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'ja-JP';
       utter.rate = voiceSpeed;
       
-      // 専門家ごとにピッチや話者をわずかに変える（OS依存だが努力値）
       const voices = window.speechSynthesis.getVoices();
       const jaVoices = voices.filter(v => v.lang.includes('ja'));
-      if (expertId && jaVoices.length > 0) {
-        // IDの数字部分などを使ってバリエーションを出す
+      
+      // ユーザーが選択した特定のボイスを優先
+      const userVoice = voices.find(v => v.voiceURI === selectedVoice);
+
+      if (userVoice) {
+        utter.voice = userVoice;
+        // 専門家ごとにピッチのみ変えて区別する
+        const idx = parseInt(expertId?.replace('e','') || '0', 10);
+        utter.pitch = 0.8 + ((idx % 5) * 0.15);
+      } else if (expertId && jaVoices.length > 0) {
         const idx = parseInt(expertId.replace('e',''), 10) || 0;
         utter.voice = jaVoices[idx % jaVoices.length];
-        utter.pitch = 0.8 + ((idx % 5) * 0.1); // 0.8 〜 1.2
+        utter.pitch = 0.8 + ((idx % 5) * 0.1);
       } else if (jaVoices.length > 0) {
         utter.voice = jaVoices[0];
       }
       window.speechSynthesis.speak(utter);
     };
+
+    // ボイス一覧の初期化
+    useEffect(() => {
+      const loadVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const ja = voices.filter(v => v.lang.includes('ja'));
+        setAvailableVoices(ja);
+        if (ja.length > 0 && !selectedVoice) setSelectedVoice(ja[0].voiceURI);
+      };
+      loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
+    }, [selectedVoice]);
 
     // 音声認識（入力）
     useEffect(() => {
@@ -1160,19 +1188,6 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
         {/* TopBar */}
         <div className="topbar">
           <div className="topbar-left">
-            {/* 音声モード切替 */}
-            <button 
-              className={`icon-btn ${voiceMode ? 'active' : ''}`} 
-              title="音声モード" 
-              onClick={() => {
-                if(!voiceMode) window.speechSynthesis?.getVoices(); // ボイス一覧の初期化
-                setVoiceMode(!voiceMode);
-              }}
-              style={{marginRight:8, background: voiceMode ? 'rgba(76,175,80,0.3)' : 'transparent'}}
-            >
-              {voiceMode ? '🎙️' : '💬'}
-            </button>
-
             <button className="icon-btn" onClick={() => setSidebarOpen(!sidebarOpen)} style={{marginRight:8, color:'white'}}>
               {sidebarOpen ? '✕' : '☰'}
             </button>
@@ -1458,18 +1473,26 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
 
                 {/* Input bar */}
                 <div className={`input-bar ${voiceMode ? 'voice-active' : ''}`}>
-                  {voiceMode && (
-                    <div className="voice-controls">
-                      <button className={`mute-btn ${isMuted ? 'muted' : ''}`} onClick={() => setIsMuted(!isMuted)}>
-                        {isMuted ? '🔇' : '🎤'}
-                      </button>
-                      <div className="speed-ctrl">
-                        <label>速さ: {voiceSpeed.toFixed(1)}</label>
-                        <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} />
+                  <div className="voice-mode-toggle-line">
+                    <button className="simple-toggle-btn" onClick={() => setVoiceMode(!voiceMode)}>
+                      音声モード：{voiceMode ? 'ON' : 'OFF'}
+                    </button>
+                    {voiceMode && (
+                      <div className="voice-mini-controls">
+                        <button className={`mute-btn ${isMuted ? 'muted' : ''}`} onClick={() => setIsMuted(!isMuted)} title="マイクミュート">
+                          {isMuted ? '🔇' : '🎤'}
+                        </button>
+                        <div className="speed-ctrl">
+                           <span>速さ:</span>
+                           <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} />
+                        </div>
+                        <select className="voice-select-minimal" value={selectedVoice} onChange={e=>setSelectedVoice(e.target.value)}>
+                          {availableVoices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+                        </select>
                       </div>
-                    </div>
-                  )}
-                  <span className="input-hint">{isGen?'介入中…':(voiceMode?'音声/文字で介入':'介入する')}</span>
+                    )}
+                  </div>
+                  <span className="input-hint">{isGen?'介入中…':(voiceMode?'音声/文字で発言':'介入する')}</span>
                   <div
                     ref={inputDivRef}
                     contentEditable="true"
