@@ -390,6 +390,12 @@
 
   const DEFAULT_EXPERTS = [
     {
+      id:'e0', name:'',
+      role:'議長 (Moderator/Chairman)',
+      description:'議論の進行、各参加者への公平な発言機会の提供、要点の中立的な要約を行う。個別の利害を持たず、議論の質を高め結論へ導く責任を持つ。',
+      color:'#455a64', power:5
+    },
+    {
       id:'e1', name:'',
       role:'産業・経営リーダー (Industrial Titan)',
       description:'資本の投下と社会実装の責任を担う。供給側のエージェントとして、利益と生存戦略に基づいて動く力を代表する。',
@@ -711,6 +717,7 @@
     const topicRef     = useRef(topic);
 
     const [topicHistory, setTopicHistory] = useState(() => JSON.parse(localStorage.getItem('eds_topic_history') || '[]'));
+    const abortControllerRef = useRef(null);
 
     useEffect(()=>{ expertsRef.current = experts; }, [experts]);
     useEffect(()=>{ settingsRef.current = settings; }, [settings]);
@@ -733,20 +740,16 @@
           throw new Error(err?.error?.message || 'モデル一覧の取得に失敗しました');
         }
         const data = await res.json();
-        // generateContent が可能なモデルのみを抽出
+        // generateContent が可能かつ、Flash/Lite（無料版想定）に絞り込み
         const filtered = data.models
           .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+          .filter(m => m.name.toLowerCase().includes('flash') || m.name.toLowerCase().includes('lite'))
           .map(m => ({
             id: m.name.replace('models/', ''),
             label: m.displayName,
             note: `入力制限: ${m.inputTokenLimit}`
           }))
-          .sort((a, b) => {
-            // バージョン番号が大きいものを優先的に上位に持ってくる
-            if (a.id > b.id) return -1;
-            if (a.id < b.id) return 1;
-            return 0;
-          });
+          .sort((a, b) => b.id > a.id ? 1 : -1);
         
         if (filtered.length > 0) {
           setAvailableModels(filtered);
@@ -780,11 +783,22 @@
     // ── Gemini API（リトライ付き）────────────────────────────────────────────
     const callGemini = async (prompt, temp=0.75, attempt=0) => {
       const model = settingsRef.current.model || 'gemini-3.1-flash-lite';
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        { method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:temp,maxOutputTokens:550,topP:0.9} }) }
-      );
+      
+      // 前のコントローラをリセット
+      if (attempt === 0) {
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        abortControllerRef.current = new AbortController();
+      }
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          { 
+            method:'POST', headers:{'Content-Type':'application/json'},
+            signal: abortControllerRef.current.signal,
+            body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:temp,maxOutputTokens:550,topP:0.9} }) 
+          }
+        );
       if (!res.ok) {
         const errData = await res.json().catch(()=>({}));
         const msg = errData?.error?.message || `APIエラー (${res.status})`;
@@ -804,8 +818,12 @@
         }
         throw new Error(msg);
       }
-      const d = await res.json();
-      return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        const d = await res.json();
+        return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      } catch (e) {
+        if (e.name === 'AbortError') return '';
+        throw e;
+      }
     };
 
     // ── Prompt builder ────────────────────────────────────────────────────────
@@ -871,9 +889,13 @@ ${dispName(expert)}の発言:`;
 ${histText || '（開始前）'}
 
 候補ロール一覧:
-${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
+${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('\n')}
 
-次に発言すべきロールのID（例: e1）のみを1つだけ返してください。`;
+【選択ルール】
+- **重要**: 直近のメッセージ（特にユーザーからの介入）で特定のロール名（例:「議長」「産業リーダー」）や名前が指名されていたら、議論の文脈を無視してでも必ずその人物を選んでください。
+- 指名がない場合は、議論を深めるのに最も適した専門家を選んでください。
+
+次に発言すべきロールのID（例: e0）のみを1つだけ返してください。`;
 
       const id = await callGemini(prompt, 0.3); // 低温で確実にIDを返させる
       const match = id.match(/e\d+/);
@@ -966,8 +988,19 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
 
     // ── Reset ─────────────────────────────────────────────────────────────────
     const handleReset = () => {
+      stopTalking();
       setIsStarted(false); setTopic(''); setBranches([]); setCurBranch(null);
       setError(null); isGenRef.current=false; setIsGen(false); setGenExpert(null);
+    };
+
+    const stopTalking = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setIsGen(false);
+      isGenRef.current = false;
+      setGenExpert(null);
     };
 
     const levelLabel = LEVEL_MAP[settings.level];
@@ -1215,10 +1248,10 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
 
                 {/* Input bar */}
                 <div className="input-bar">
-                  <span className="input-hint">{isGen?'生成中…':'介入する'}</span>
+                  <span className="input-hint">{isGen?'介入中…':'介入する'}</span>
                   <div
                     ref={inputDivRef}
-                    contentEditable={!isGen}
+                    contentEditable="true"
                     suppressContentEditableWarning
                     className="input-field-rich"
                     onKeyDown={e=>{
@@ -1227,14 +1260,20 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}`).join('\n')}
                       }
                     }}
                     onInput={e=>setInputHasContent(e.currentTarget.innerText.trim().length>0)}
-                    data-placeholder="議論に参加・方向を変える・制約を投下… (⌘/Ctrl+Enter で送信)"
+                    data-placeholder="ロール名での指名も可能（例：「議長、要約を」）(⌘/Ctrl+Enter で送信)"
                     aria-label="介入メッセージを入力"
                     spellCheck="false"
                   />
-                  {!isGen && messages.length>0 && (
-                    <button className="continue-btn" onClick={handleContinue}>続きを生成</button>
+                  {isGen ? (
+                    <button className="continue-btn" onClick={stopTalking} style={{borderColor:'#d93025',color:'#d93025'}}>待った！</button>
+                  ) : (
+                    <>
+                      {messages.length>0 && (
+                        <button className="continue-btn" onClick={handleContinue}>続きを生成</button>
+                      )}
+                    </>
                   )}
-                  <button className="send-btn" onClick={handleSend} disabled={isGen||!inputHasContent}>➤</button>
+                  <button className="send-btn" onClick={handleSend} disabled={!inputHasContent}>➤</button>
                 </div>
               </div>
             )}
