@@ -406,8 +406,25 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
-  </style>
-</head>
+    .preset-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .preset-item { 
+      padding: 6px 10px; border-radius: 8px; display: flex; align-items: center; gap: 8px; 
+      cursor: pointer; transition: all 0.2s; border: 1px solid transparent; position: relative;
+    }
+    .preset-item:hover { background: #f3f4f6; }
+    .preset-item.active { background: #fff; border-color: #e2e0db; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .preset-icon { font-size: 14px; opacity: 0.7; }
+    .preset-name { font-size: 12px; font-weight: 500; color: #374151; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preset-name-input { font-size: 11px; padding: 1px 4px; border: 1px solid #5a7ba2; border-radius: 4px; flex: 1; outline: none; }
+    .preset-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+    .preset-item:hover .preset-actions { opacity: 1; }
+    .preset-action-btn { background: none; border: none; cursor: pointer; color: #9ca3af; padding: 2px; font-size: 12px; }
+    .preset-action-btn:hover { color: #5a7ba2; }
+    .icon-btn-small { background: none; border: none; cursor: pointer; font-size: 10px; color: #5a7ba2; font-weight: 700; opacity: 0.7; }
+    .icon-btn-small:hover { opacity: 1; }
+    .expert-list-scroll { max-height: 400px; overflow-y: auto; margin-bottom: 8px; }
+    </style>
+  </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
@@ -506,10 +523,10 @@
 
   // 利用可能なモデル一覧のデフォルト設定（2026年最新モデルを含む）
   const DEFAULT_MODELS = [
-    { id:'gemini-3.1-flash-lite',          label:'Gemini 3.1 Flash Lite (最新推奨)', note:'無料: 15 RPM / 500 RPD' },
-    { id:'gemini-3-flash',                 label:'Gemini 3 Flash',               note:'無料: 5 RPM' },
-    { id:'gemini-2.5-flash',               label:'Gemini 2.5 Flash',             note:'無料: 5 RPM / 20 RPD' },
     { id:'gemini-2.1-flash',               label:'Gemini 2.1 Flash (安定)',      note:'無料: 15 RPM' },
+    { id:'gemini-3.1-flash-lite',          label:'Gemini 3.1 Flash Lite',          note:'無料: 15 RPM / 500 RPD' },
+    { id:'gemini-2.5-flash',               label:'Gemini 2.5 Flash (Native Audio 推奨)', note:'無料: 高品質音声生成' },
+    { id:'gemini-3-flash',                 label:'Gemini 3 Flash',               note:'無料: 5 RPM' },
     { id:'gemini-2.1-pro',                 label:'Gemini 2.1 Pro (高性能)',      note:'無料: 2 RPM / 50 RPD' },
   ];
 
@@ -520,6 +537,13 @@
   // 簡易難読化（ローカルストレージ用）
   const encK = (k) => k ? btoa(k.split('').reverse().join('')) : '';
   const decK = (k) => { try { return k ? atob(k).split('').reverse().join('') : ''; } catch(e){return '';} };
+
+  const b64ToBlob = (b64, type) => {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for(let i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type });
+  };
 
   // Display name: use set name, or first part of role (before parenthesis)
   const dispName = (e) => {
@@ -723,7 +747,15 @@
   // ─── App ─────────────────────────────────────────────────────────────────────
   const App = () => {
     const [apiKey, setApiKey]   = useState(()=>decK(localStorage.getItem('eds_key_enc'))||'');
-    const [experts, setExperts] = useState(DEFAULT_EXPERTS);
+    const [experts, setExperts] = useState([]);
+    const [presets, setPresets] = useState(() => {
+      const saved = localStorage.getItem('eds_presets');
+      if (saved) return JSON.parse(saved);
+      // 初期プリセット
+      return [{ id: 'p-default', name: '標準セット', experts: DEFAULT_EXPERTS }];
+    });
+    const [activePresetId, setActivePresetId] = useState(() => localStorage.getItem('eds_active_preset_id') || 'p-default');
+    const [editingPresetId, setEditingPresetId] = useState(null);
     const [topic, setTopic]     = useState('');
     const [isStarted, setIsStarted] = useState(false);
     const [isGen, setIsGen]         = useState(false);
@@ -748,7 +780,7 @@
     const [voiceSpeed, setVoiceSpeed] = useState(1.0);
     const [isMuted, setIsMuted]     = useState(false);
     const [availableVoices, setAvailableVoices] = useState([]);
-    const [selectedVoice, setSelectedVoice] = useState('');
+    const [selectedVoice, setSelectedVoice] = useState('native');
 
     const endRef       = useRef(null);
     const inputDivRef  = useRef(null);
@@ -762,6 +794,25 @@
     const [curSessionId, setCurSessionId] = useState(null);
     const abortControllerRef = useRef(null);
     const recognitionRef = useRef(null);
+
+    // プリセットとexpertsの同期
+    useEffect(() => {
+      const active = presets.find(p => p.id === activePresetId) || presets[0];
+      if (active) {
+        setExperts(active.experts);
+        setActivePresetId(active.id);
+      }
+    }, [activePresetId]);
+
+    useEffect(() => {
+      localStorage.setItem('eds_presets', JSON.stringify(presets));
+      localStorage.setItem('eds_active_preset_id', activePresetId);
+    }, [presets, activePresetId]);
+
+    // expertsの変更を現在のプリセットに反映
+    useEffect(() => {
+      setPresets(prev => prev.map(p => p.id === activePresetId ? { ...p, experts } : p));
+    }, [experts]);
 
     // 音声合成（読み上げ）
     const speakText = (text, expertId) => {
@@ -846,7 +897,10 @@
       if (msgs.length === 0) return;
       const last = msgs[msgs.length - 1];
       if (last.type === 'expert') {
-        speakText(last.content, last.expertId);
+        // Native Audioの場合はgenOne内で再生済みのため、ここではブラウザボイスのみ
+        if (selectedVoice !== 'native') {
+          speakText(last.content, last.expertId);
+        }
       }
     }, [branches, voiceMode]);
 
@@ -928,13 +982,18 @@
     };
 
     // ── Gemini API（リトライ付き）────────────────────────────────────────────
-    const callGemini = async (prompt, temp=0.75, attempt=0) => {
+    const callGemini = async (prompt, temp=0.75, attempt=0, requestAudio=false) => {
       const model = settingsRef.current.model || 'gemini-3.1-flash-lite';
-      
-      // 前のコントローラをリセット
+      const useNativeAudio = requestAudio && model.includes('2.5-flash') && selectedVoice === 'native';
+
       if (attempt === 0) {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
+      }
+
+      const generationConfig = { temperature:temp, maxOutputTokens:650, topP:0.9 };
+      if (useNativeAudio) {
+        generationConfig.response_mime_type = "audio/wav";
       }
 
       try {
@@ -943,32 +1002,32 @@
           { 
             method:'POST', headers:{'Content-Type':'application/json'},
             signal: abortControllerRef.current.signal,
-            body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:temp,maxOutputTokens:550,topP:0.9} }) 
+            body:JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig }) 
           }
         );
-      if (!res.ok) {
-        const errData = await res.json().catch(()=>({}));
-        const msg = errData?.error?.message || `APIエラー (${res.status})`;
-
-        // レートリミット（429）: エラーメッセージから待機秒数をパースしてリトライ
-        if (res.status === 429 && attempt < 4) {
-          const secsMatch = msg.match(/retry in (\d+(?:\.\d+)?)s/i);
-          const waitSec = secsMatch ? Math.ceil(parseFloat(secsMatch[1])) + 2 : 15 * (attempt + 1);
-          // カウントダウン表示
-          for (let s = waitSec; s > 0; s--) {
-            if (!isGenRef.current) return '';
-            setRetryCountdown(s);
-            await new Promise(r => setTimeout(r, 1000));
+        if (!res.ok) {
+          const errData = await res.json().catch(()=>({}));
+          const msg = errData?.error?.message || `APIエラー (${res.status})`;
+          if (res.status === 429 && attempt < 4) {
+            const secsMatch = msg.match(/retry in (\d+(?:\.\d+)?)s/i);
+            const waitSec = secsMatch ? Math.ceil(parseFloat(secsMatch[1])) + 2 : 15 * (attempt + 1);
+            for (let s = waitSec; s > 0; s--) {
+              if (!isGenRef.current) return { text:'' };
+              setRetryCountdown(s);
+              await new Promise(r => setTimeout(r, 1000));
+            }
+            setRetryCountdown(0);
+            return callGemini(prompt, temp, attempt + 1, requestAudio);
           }
-          setRetryCountdown(0);
-          return callGemini(prompt, temp, attempt + 1);
+          throw new Error(msg);
         }
-        throw new Error(msg);
-      }
         const d = await res.json();
-        return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        const parts = d.candidates?.[0]?.content?.parts || [];
+        const text = parts.find(p => p.text)?.text?.trim() || '';
+        const audioData = parts.find(p => p.inline_data)?.inline_data?.data;
+        return { text, audioData };
       } catch (e) {
-        if (e.name === 'AbortError') return '';
+        if (e.name === 'AbortError') return { text:'' };
         throw e;
       }
     };
@@ -1008,17 +1067,37 @@ ${dispName(expert)}の発言:`;
     // ── Generate one expert ───────────────────────────────────────────────────
     const genOne = async (expert, branchId, history, cfg, isFirst=false) => {
       setGenExpert(expert);
-      // リクエスト間隔：最初は短く、2回目以降は設定値を適用してRPMを超えないようにする
       const delaySec = isFirst ? 0.4 : (cfg.reqDelay ?? 1);
       await new Promise(r=>setTimeout(r, delaySec * 1000));
       if(!isGenRef.current) return null;
       const temp = cfg.intensity==='calm'?0.42:cfg.intensity==='heated'?0.93:0.72;
-      const content = await callGemini(buildPrompt(expert, history, topicRef.current, cfg), temp);
-      if(!content) throw new Error('空のレスポンスが返されました');
-      const msg = { id:`m${uid()}`, type:'expert', expertId:expert.id, content, timestamp:ts() };
+      const { text, audioData } = await callGemini(buildPrompt(expert, history, topicRef.current, cfg), temp, 0, voiceMode);
+      if(!text) throw new Error('空のレスポンスが返されました');
+      const msg = { id:`m${uid()}`, type:'expert', expertId:expert.id, content:text, timestamp:ts() };
       pushMsg(branchId, msg);
+      if (audioData) playNativeAudio(audioData);
       setGenExpert(null);
       return msg;
+    };
+
+    const nativeAudioRef = useRef(null);
+    const playNativeAudio = (data) => {
+      if (nativeAudioRef.current) { nativeAudioRef.current.pause(); nativeAudioRef.current = null; }
+      try {
+        const blob = b64ToBlob(data, 'audio/wav');
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.playbackRate = voiceSpeed;
+        nativeAudioRef.current = audio;
+        audio.play().catch(e => console.error('Audio play error:', e));
+      } catch(e) { console.error('Audio processing error:', e); }
+    };
+
+    const stopTalking = () => {
+      if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (nativeAudioRef.current) { nativeAudioRef.current.pause(); nativeAudioRef.current = null; }
+      setIsGen(false); isGenRef.current = false; setGenExpert(null);
     };
 
     // ── 次の発言者を選択 ──────────────────────────────────────────────────
@@ -1044,7 +1123,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
 
 次に発言すべきロールのID（例: e0）のみを1つだけ返してください。`;
 
-      const id = await callGemini(prompt, 0.3); // 低温で確実にIDを返させる
+      const { text: id } = await callGemini(prompt, 0.3); // 低温で確実にIDを返させる
       const match = id.match(/e\d+/);
       if (match && exps.find(e => e.id === match[0])) return exps.find(e => e.id === match[0]);
       // マッチしない場合はランダムか順番
@@ -1169,14 +1248,10 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
       setError(null);
     };
 
-    const stopTalking = () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      setIsGen(false);
-      isGenRef.current = false;
-      setGenExpert(null);
+    // モード切り替え
+    const toggleVoiceMode = () => {
+      stopTalking();
+      setVoiceMode(!voiceMode);
     };
 
     const levelLabel = LEVEL_MAP[settings.level];
@@ -1234,23 +1309,70 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
 
           {/* Sidebar */}
           <div className={`sidebar${sidebarOpen ? ' open' : ''}`} style={!sidebarOpen && window.innerWidth > 768 ? {width:0, overflow:'hidden', border:0} : { transition: 'all 0.3s ease' }}>
-            <div className="sidebar-section">
-              <div className="sidebar-title">精鋭ロール ({experts.length})</div>
-              {experts.map(exp=>(
-                <div className="expert-item" key={exp.id}>
-                  <Av expert={exp} size={30}/>
-                  <div className="expert-info">
-                    <div className="expert-dname">{dispName(exp)}</div>
-                    <div className="expert-role-small">{exp.role.split(' (')[0]}</div>
+            
+            {/* プリセット管理 */}
+            <div className="sidebar-section" style={{paddingBottom:0}}>
+              <div className="sidebar-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <span>ロール・プリセット</span>
+                <button className="icon-btn-small" onClick={() => {
+                  const newId = `p-${uid()}`;
+                  setPresets([...presets, { id: newId, name: `新規セット ${presets.length + 1}`, experts: DEFAULT_EXPERTS }]);
+                  setActivePresetId(newId);
+                }} title="プリセットを追加">📁＋</button>
+              </div>
+              <div className="preset-list">
+                {presets.map(p => (
+                  <div key={p.id} className={`preset-item ${activePresetId === p.id ? 'active' : ''}`} onClick={() => setActivePresetId(p.id)}>
+                    <span className="preset-icon">📂</span>
+                    {editingPresetId === p.id ? (
+                      <input 
+                        autoFocus 
+                        className="preset-name-input" 
+                        value={p.name} 
+                        onChange={e => setPresets(prev => prev.map(x => x.id === p.id ? { ...x, name: e.target.value } : x))}
+                        onBlur={() => setEditingPresetId(null)}
+                        onKeyDown={e => e.key === 'Enter' && setEditingPresetId(null)}
+                      />
+                    ) : (
+                      <span className="preset-name" onDoubleClick={() => setEditingPresetId(p.id)}>{p.name}</span>
+                    )}
+                    <div className="preset-actions">
+                      <button className="preset-action-btn" onClick={(e) => { e.stopPropagation(); setEditingPresetId(p.id); }}>✎</button>
+                      {presets.length > 1 && (
+                        <button className="preset-action-btn" onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if(confirm('このプリセットを削除しますか？')) {
+                            const next = presets.filter(x => x.id !== p.id);
+                            setPresets(next);
+                            if(activePresetId === p.id) setActivePresetId(next[0].id);
+                          }
+                        }}>×</button>
+                      )}
+                    </div>
                   </div>
-                  {exp.power !== 0 && (
-                    <span className="power-badge" style={{background:exp.power>0?'#e8f0fe':'#fff3e0',color:powerColor(exp.power)}}>
-                      {exp.power>0?`+${exp.power}`:exp.power}
-                    </span>
-                  )}
-                  <button className="expert-edit-btn" onClick={()=>setExpertModal(exp)}>✏️</button>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className="sidebar-section" style={{borderTop:'none', paddingTop:0}}>
+              <div className="sidebar-title">精鋭ロール ({experts.length})</div>
+              <div className="expert-list-scroll">
+                {experts.map(exp=>(
+                  <div className="expert-item" key={exp.id}>
+                    <Av expert={exp} size={30}/>
+                    <div className="expert-info">
+                      <div className="expert-dname">{dispName(exp)}</div>
+                      <div className="expert-role-small">{exp.role.split(' (')[0]}</div>
+                    </div>
+                    {exp.power !== 0 && (
+                      <span className="power-badge" style={{background:exp.power>0?'#e8f0fe':'#fff3e0',color:powerColor(exp.power)}}>
+                        {exp.power>0?`+${exp.power}`:exp.power}
+                      </span>
+                    )}
+                    <button className="expert-edit-btn" onClick={()=>setExpertModal(exp)}>✏️</button>
+                  </div>
+                ))}
+              </div>
               <button className="add-expert-btn" onClick={()=>setExpertModal('new')}>＋ ロールを追加</button>
             </div>
 
@@ -1472,27 +1594,28 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                 </div>
 
                 {/* Input bar */}
-                <div className={`input-bar ${voiceMode ? 'voice-active' : ''}`}>
-                  <div className="voice-mode-toggle-line">
-                    <button className="simple-toggle-btn" onClick={() => setVoiceMode(!voiceMode)}>
-                      音声モード：{voiceMode ? 'ON' : 'OFF'}
+                <div className={`input-bar ${voiceMode ? 'voice-active' : ''}`} style={{borderTop:'1px solid #e5e7eb', background:'#fff'}}>
+                  <div className="voice-mode-toggle-line" style={{borderBottom:'1px solid #f9fafb', paddingBottom:6, marginBottom:4}}>
+                    <button className="simple-toggle-btn" onClick={toggleVoiceMode} style={{background:voiceMode?'#f3f4f6':'none', border:'1px solid #d1d5db', color:voiceMode?'#111827':'#6b7280'}}>
+                      音声モード：{voiceMode ? '有効' : '無効'}
                     </button>
                     {voiceMode && (
-                      <div className="voice-mini-controls">
-                        <button className={`mute-btn ${isMuted ? 'muted' : ''}`} onClick={() => setIsMuted(!isMuted)} title="マイクミュート">
+                      <div className="voice-mini-controls" style={{display:'flex', alignItems:'center', gap:10}}>
+                        <button className={`mute-btn ${isMuted ? 'muted' : ''}`} onClick={() => setIsMuted(!isMuted)} style={{width:28, height:28, fontSize:14}} title="マイク設定">
                           {isMuted ? '🔇' : '🎤'}
                         </button>
-                        <div className="speed-ctrl">
-                           <span>速さ:</span>
-                           <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} />
+                        <div className="speed-ctrl" style={{display:'flex', alignItems:'center', gap:6, fontSize:10}}>
+                           <span style={{opacity:0.7}}>速さ</span>
+                           <input type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))} style={{width:60}} />
                         </div>
-                        <select className="voice-select-minimal" value={selectedVoice} onChange={e=>setSelectedVoice(e.target.value)}>
+                        <select className="voice-select-minimal" value={selectedVoice} onChange={e=>setSelectedVoice(e.target.value)} style={{fontSize:10, padding:'1px 4px', border:'1px solid #d1d5db'}}>
+                          <option value="native">✨ Gemini Native</option>
                           {availableVoices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
                         </select>
                       </div>
                     )}
                   </div>
-                  <span className="input-hint">{isGen?'介入中…':(voiceMode?'音声/文字で発言':'介入する')}</span>
+                  <span className="input-hint">{isGen?'生成中...':(voiceMode?'音声/文字で介入':'介入メッセージを入力')}</span>
                   <div
                     ref={inputDivRef}
                     contentEditable="true"
@@ -1504,20 +1627,20 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                       }
                     }}
                     onInput={e=>setInputHasContent(e.currentTarget.innerText.trim().length>0)}
-                    data-placeholder="ロール名での指名も可能（例：「議長、要約を」）(⌘/Ctrl+Enter で送信)"
+                    data-placeholder="メッセージを入力... (⌘+Enter で送信)"
                     aria-label="介入メッセージを入力"
                     spellCheck="false"
                   />
                   {isGen ? (
-                    <button className="continue-btn" onClick={stopTalking} style={{borderColor:'#d93025',color:'#d93025'}}>待った！</button>
+                    <button className="continue-btn" onClick={stopTalking} style={{borderColor:'#ef4444', color:'#ef4444', fontWeight:700}}>停止</button>
                   ) : (
-                    <>
-                      {messages.length>0 && (
-                        <button className="continue-btn" onClick={handleContinue}>続きを生成</button>
-                      )}
-                    </>
+                    <button className="send-btn" onClick={handleSend} disabled={!inputHasContent}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                      </svg>
+                    </button>
                   )}
-                  <button className="send-btn" onClick={handleSend} disabled={!inputHasContent}>➤</button>
                 </div>
               </div>
             )}
