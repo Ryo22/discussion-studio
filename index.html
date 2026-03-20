@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     /*
      * カラーパレット
@@ -624,6 +625,11 @@
     return `【発言力・影響力: ${p}（非常に弱い/周縁的）】あなたはこの会議において非常に弱い立場にある。慎重かつ謙虚に発言し、強い参加者の意見に押されることもある。それでも自分のロールの核心は主張すること。`;
   };
 
+  // ─── Supabase Configuration ────────────────────────────────────────────────
+  const SB_URL = 'https://xyzwsrkvouivpikmdmxk.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5endzcmt2b3VpdnBpa21kbXhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5ODIyNDcsImV4cCI6MjA4OTU1ODI0N30.fM1m7r2LWv-6156QwZ4G0b7buXW7YcitKGLAyFGmFDQ';
+  const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+
   // ─── Components ──────────────────────────────────────────────────────────────
 
   const Av = ({ expert, size=32 }) => (
@@ -841,6 +847,13 @@
     const [isMuted, setIsMuted]     = useState(false);
     const [availableVoices, setAvailableVoices] = useState([]);
     const [selectedVoice, setSelectedVoice] = useState('native');
+    const [deviceId] = useState(() => {
+      let id = localStorage.getItem('eds_device_id');
+      if (!id) { id = `dev-${uid()}`; localStorage.setItem('eds_device_id', id); }
+      return id;
+    });
+    const [cloudStatus, setCloudStatus] = useState('idle');
+    const initialSyncCompleted = useRef(false);
 
     const endRef       = useRef(null);
     const inputDivRef  = useRef(null);
@@ -849,6 +862,48 @@
     const expertsRef   = useRef(experts);
     const settingsRef  = useRef(settings);
     const topicRef     = useRef(topic);
+
+    const saveToCloud = useCallback(async (key, data) => {
+      if (!sb) return;
+      setCloudStatus('syncing');
+      try {
+        const { error } = await sb.from('eds_cloud_data').upsert({
+          device_id: deviceId,
+          data_key: key,
+          content: data,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'device_id, data_key' });
+        if (error) throw error;
+        setCloudStatus('success');
+        setTimeout(() => setCloudStatus('idle'), 2000);
+      } catch (e) {
+        console.error('Cloud Sync Error:', e);
+        setCloudStatus('error');
+      }
+    }, [deviceId]);
+
+    useEffect(() => {
+      const syncFromCloud = async () => {
+        if (!sb) { initialSyncCompleted.current = true; return; }
+        setCloudStatus('syncing');
+        try {
+          const { data, error } = await sb.from('eds_cloud_data').select('*').eq('device_id', deviceId);
+          if (!error && data) {
+            data.forEach(item => {
+              if (item.data_key === 'presets') setPresets(item.content);
+              if (item.data_key === 'sessions') setSessions(item.content);
+              if (item.data_key === 'apiKeyEnc') {
+                const k = decK(item.content);
+                if (k) setApiKey(k);
+              }
+            });
+          }
+        } catch(e) { console.error('Cloud load error:', e); }
+        setCloudStatus('idle');
+        setTimeout(() => { initialSyncCompleted.current = true; }, 1500);
+      };
+      syncFromCloud();
+    }, [deviceId]);
 
     const [sessions, setSessions] = useState(() => JSON.parse(localStorage.getItem('eds_sessions') || '[]'));
     const [curSessionId, setCurSessionId] = useState(null);
@@ -897,11 +952,20 @@
 
     // expertsまたはpresetsが変更されたら保存
     useEffect(() => {
-      // 現在のexpertsをpresetsの中の状態に同期してから保存
       const updatedPresets = presets.map(p => p.id === activePresetId ? { ...p, experts } : p);
       localStorage.setItem('eds_presets', JSON.stringify(updatedPresets));
       localStorage.setItem('eds_active_preset_id', activePresetId);
-    }, [experts, presets, activePresetId]);
+      if (initialSyncCompleted.current) saveToCloud('presets', updatedPresets);
+    }, [experts, presets, activePresetId, saveToCloud]);
+
+    // APIキーの保存/同期
+    useEffect(() => {
+      if (apiKey) {
+        const enc = encK(apiKey);
+        localStorage.setItem('eds_key_enc', enc);
+        if (initialSyncCompleted.current) saveToCloud('apiKeyEnc', enc);
+      }
+    }, [apiKey, saveToCloud]);
 
     // 音声合成（読み上げ）
     const speakText = (text, expertId) => {
@@ -1001,7 +1065,8 @@
     // セッションの永続化
     useEffect(() => {
       localStorage.setItem('eds_sessions', JSON.stringify(sessions));
-    }, [sessions]);
+      if (initialSyncCompleted.current) saveToCloud('sessions', sessions);
+    }, [sessions, saveToCloud]);
 
     // 現在のセッションを更新する同期UI
     useEffect(() => {
@@ -1405,6 +1470,19 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
           {/* Sidebar */}
           <div className={`sidebar${sidebarOpen ? ' open' : ''}`} style={!sidebarOpen && window.innerWidth > 768 ? {width:0, overflow:'hidden', border:0} : { transition: 'all 0.3s ease' }}>
             
+            {/* Sync Status */}
+            <div style={{
+              fontSize:9, padding:'4px 14px', background:'#eeebe6', color:'#9ca3af', 
+              display:'flex', alignItems:'center', gap:5, borderBottom:'1px solid #e2e0db'
+            }}>
+              <div style={{
+                width:6, height:6, borderRadius:'50%', 
+                background: cloudStatus==='syncing'?'#5a7ba2':cloudStatus==='error'?'#ef4444':cloudStatus==='success'?'#10b981':'#d1cdc6'
+              }} />
+              {cloudStatus==='syncing'?'クラウド同期中...':cloudStatus==='error'?'同期エラー':cloudStatus==='success'?'同期完了':'クラウド同期有効'}
+              <span style={{marginLeft:'auto', opacity:0.7}}>{deviceId.slice(0,8)}</span>
+            </div>
+
             {/* プリセット管理 */}
             <div className="sidebar-section" style={{paddingBottom:0}}>
               <div className="sidebar-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
