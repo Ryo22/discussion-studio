@@ -429,7 +429,18 @@
     }
     .expert-item:hover .expert-delete-btn { opacity: 1; }
     .expert-delete-btn:hover { background: #fee2e2; color: #ef4444; border-color: #fecaca; }
-    .expert-edit-btn { margin-left: auto; }
+    /* Notification Toast */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #374151; color: #fff; padding: 8px 16px; border-radius: 20px;
+      font-size: 13px; font-weight: 500; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      z-index: 9999; animation: toastIn 0.3s ease-out forwards;
+      display: flex; align-items: center; gap: 8px; pointer-events: none;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, 20px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
     </style>
   </head>
 <body>
@@ -754,15 +765,21 @@
   // ─── App ─────────────────────────────────────────────────────────────────────
   const App = () => {
     const [apiKey, setApiKey]   = useState(()=>decK(localStorage.getItem('eds_key_enc'))||'');
-    const [experts, setExperts] = useState([]);
     const [presets, setPresets] = useState(() => {
       const saved = localStorage.getItem('eds_presets');
       if (saved) return JSON.parse(saved);
-      // 初期プリセット
       return [{ id: 'p-default', name: '標準セット', experts: DEFAULT_EXPERTS }];
     });
     const [activePresetId, setActivePresetId] = useState(() => localStorage.getItem('eds_active_preset_id') || 'p-default');
+    
+    // ロールを初期データから即座に復元
+    const [experts, setExperts] = useState(() => {
+      const active = presets.find(p => p.id === activePresetId) || presets[0];
+      return active ? active.experts : DEFAULT_EXPERTS;
+    });
+
     const [editingPresetId, setEditingPresetId] = useState(null);
+    const [toast, setToast] = useState(null);
     const [topic, setTopic]     = useState('');
     const [isStarted, setIsStarted] = useState(false);
     const [isGen, setIsGen]         = useState(false);
@@ -803,9 +820,15 @@
     const recognitionRef = useRef(null);
     const undoStack = useRef([]);
 
+    const showToast = (msg) => {
+      setToast(msg);
+      setTimeout(() => setToast(null), 2500);
+    };
+
     // 操作履歴を保存
-    const saveHistory = useCallback(() => {
-      undoStack.current.push(JSON.stringify({ presets, activePresetId }));
+    const saveHistory = useCallback((customPresets = null) => {
+      const p = customPresets || presets;
+      undoStack.current.push(JSON.stringify({ presets: p, activePresetId }));
       if (undoStack.current.length > 50) undoStack.current.shift();
     }, [presets, activePresetId]);
 
@@ -814,36 +837,35 @@
       const prev = JSON.parse(undoStack.current.pop());
       setPresets(prev.presets);
       setActivePresetId(prev.activePresetId);
+      showToast('↩️ 操作を元に戻しました');
     }, []);
 
     useEffect(() => {
       const handleGlobalKey = (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        const isZ = e.key.toLowerCase() === 'z' || e.code === 'KeyZ';
+        if ((e.metaKey || e.ctrlKey) && isZ && !e.shiftKey) {
           e.preventDefault();
           handleUndo();
         }
       };
-      window.addEventListener('keydown', handleGlobalKey);
-      return () => window.removeEventListener('keydown', handleGlobalKey);
+      window.addEventListener('keydown', handleGlobalKey, true); // capture phase
+      return () => window.removeEventListener('keydown', handleGlobalKey, true);
     }, [handleUndo]);
-    // プリセットとexpertsの同期
+    // プリセット切替
     useEffect(() => {
-      const active = presets.find(p => p.id === activePresetId) || presets[0];
+      const active = presets.find(p => p.id === activePresetId);
       if (active) {
-        setExperts(active.experts);
-        setActivePresetId(active.id);
+        setExperts([...active.experts]); // 複製して状態セット
       }
     }, [activePresetId]);
 
+    // expertsまたはpresetsが変更されたら保存
     useEffect(() => {
-      localStorage.setItem('eds_presets', JSON.stringify(presets));
+      // 現在のexpertsをpresetsの中の状態に同期してから保存
+      const updatedPresets = presets.map(p => p.id === activePresetId ? { ...p, experts } : p);
+      localStorage.setItem('eds_presets', JSON.stringify(updatedPresets));
       localStorage.setItem('eds_active_preset_id', activePresetId);
-    }, [presets, activePresetId]);
-
-    // expertsの変更を現在のプリセットに反映
-    useEffect(() => {
-      setPresets(prev => prev.map(p => p.id === activePresetId ? { ...p, experts } : p));
-    }, [experts]);
+    }, [experts, presets, activePresetId]);
 
     // 音声合成（読み上げ）
     const speakText = (text, expertId) => {
@@ -1712,6 +1734,8 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
           <ForkModal message={forkData.message} expert={forkData.expert}
             onFork={m=>handleFork(forkData.message,m)} onClose={()=>setForkData(null)} />
         )}
+
+        {toast && <div className="toast">{toast}</div>}
       </div>
     );
   };
