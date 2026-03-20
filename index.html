@@ -872,7 +872,7 @@
           data_key: key,
           content: data,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'device_id, data_key' });
+        }, { onConflict: 'device_id,data_key' });
         if (error) throw error;
         setCloudStatus('success');
         setTimeout(() => setCloudStatus('idle'), 2000);
