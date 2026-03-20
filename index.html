@@ -1352,6 +1352,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
               <div className="sidebar-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <span>ロール・プリセット</span>
                 <button className="icon-btn-small" onClick={() => {
+                  saveHistory();
                   const newId = `p-${uid()}`;
                   setPresets([...presets, { id: newId, name: `新規セット ${presets.length + 1}`, experts: DEFAULT_EXPERTS }]);
                   setActivePresetId(newId);
@@ -1367,8 +1368,8 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         className="preset-name-input" 
                         value={p.name} 
                         onChange={e => setPresets(prev => prev.map(x => x.id === p.id ? { ...x, name: e.target.value } : x))}
-                        onBlur={() => setEditingPresetId(null)}
-                        onKeyDown={e => e.key === 'Enter' && setEditingPresetId(null)}
+                        onBlur={() => { saveHistory(); setEditingPresetId(null); }}
+                        onKeyDown={e => { if(e.key === 'Enter') { saveHistory(); setEditingPresetId(null); }}}
                       />
                     ) : (
                       <span className="preset-name" onDoubleClick={() => setEditingPresetId(p.id)}>{p.name}</span>
@@ -1379,6 +1380,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         <button className="preset-action-btn" onClick={(e) => { 
                           e.stopPropagation(); 
                           if(confirm('このプリセットを削除しますか？')) {
+                            saveHistory();
                             const next = presets.filter(x => x.id !== p.id);
                             setPresets(next);
                             if(activePresetId === p.id) setActivePresetId(next[0].id);
