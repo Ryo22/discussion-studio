@@ -1203,21 +1203,41 @@
         }
         const data = await res.json();
         // generateContent が可能かつ、Flash/Lite（無料版想定）に絞り込み
+        // Geminiモデルのみ・generateContent対応・flash/liteを含むものに絞る
         const filtered = data.models
           .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+          .filter(m => m.name.toLowerCase().startsWith('models/gemini'))
           .filter(m => m.name.toLowerCase().includes('flash') || m.name.toLowerCase().includes('lite'))
           .map(m => ({
             id: m.name.replace('models/', ''),
             label: m.displayName,
             note: `入力制限: ${m.inputTokenLimit}`
           }))
-          .sort((a, b) => b.id > a.id ? 1 : -1);
-        
+          // バージョン番号が大きい順 → latest系を末尾に
+          .sort((a, b) => {
+            const rank = (id) => {
+              if (id.includes('3.1')) return 10;
+              if (id.includes('3.0') || id.includes('3-')) return 9;
+              if (id.includes('2.5')) return 8;
+              if (id.includes('2.0') || id.includes('2-')) return 7;
+              if (id.includes('latest')) return 5;
+              return 6;
+            };
+            const rd = rank(b.id) - rank(a.id);
+            if (rd !== 0) return rd;
+            return b.id > a.id ? 1 : -1;
+          });
+
         if (filtered.length > 0) {
           setAvailableModels(filtered);
           setSettings(s => {
             if (!filtered.find(m => m.id === s.model)) {
-              return { ...s, model: filtered[0].id };
+              // 優先順: 3.1-flash-lite → flash-lite系 → 先頭
+              const preferred =
+                filtered.find(m => m.id.includes('3.1-flash-lite')) ||
+                filtered.find(m => m.id.includes('flash-lite')) ||
+                filtered[0];
+              return { ...s, model: preferred.id };
             }
             return s;
           });
