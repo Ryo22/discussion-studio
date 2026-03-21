@@ -1461,8 +1461,14 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
       if (isGen) return;
       stopTalking();
       setTopic(s.topic);
-      setExperts(s.experts);
-      if (s.presetId) setActivePresetId(s.presetId);
+      if (s.presetId) {
+        // プリセットのexpertsをセッション時点のものに更新してから切替
+        // （activePresetId変更のuseEffectがpreset.expertsで上書きするため先に更新が必要）
+        setPresets(prev => prev.map(p => p.id === s.presetId ? { ...p, experts: s.experts } : p));
+        setActivePresetId(s.presetId);
+      } else {
+        setExperts(s.experts);
+      }
       setBranches(s.branches);
       // ブランチのメッセージデータをworkingMsgsに即時反映
       s.branches.forEach(b => {
