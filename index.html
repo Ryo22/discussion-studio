@@ -605,14 +605,20 @@
   const LEVEL_MAP   = { general:'一般向け', intermediate:'中級', advanced:'専門家向け' };
   const INTENS_MAP  = { calm:'冷静', moderate:'普通', heated:'白熱' };
 
-  // 利用可能なモデル一覧のデフォルト設定（2026年最新モデルを含む）
+  // 利用可能なモデル一覧のデフォルト設定（rpd: 1日あたりのリクエスト上限、null=制限なし）
   const DEFAULT_MODELS = [
-    { id:'gemini-2.1-flash',               label:'Gemini 2.1 Flash (安定)',      note:'無料: 15 RPM' },
-    { id:'gemini-3.1-flash-lite',          label:'Gemini 3.1 Flash Lite',          note:'無料: 15 RPM / 500 RPD' },
-    { id:'gemini-2.5-flash',               label:'Gemini 2.5 Flash (Native Audio 推奨)', note:'無料: 高品質音声生成' },
-    { id:'gemini-3-flash',                 label:'Gemini 3 Flash',               note:'無料: 5 RPM' },
-    { id:'gemini-2.1-pro',                 label:'Gemini 2.1 Pro (高性能)',      note:'無料: 2 RPM / 50 RPD' },
+    { id:'gemini-2.1-flash',      label:'Gemini 2.1 Flash (安定)',           note:'無料: 15 RPM',            rpd: null },
+    { id:'gemini-3.1-flash-lite', label:'Gemini 3.1 Flash Lite',             note:'無料: 15 RPM / 500 RPD',  rpd: 500  },
+    { id:'gemini-2.5-flash',      label:'Gemini 2.5 Flash (Native Audio 推奨)', note:'無料: 高品質音声生成', rpd: null },
+    { id:'gemini-3-flash',        label:'Gemini 3 Flash',                    note:'無料: 5 RPM',             rpd: null },
+    { id:'gemini-2.1-pro',        label:'Gemini 2.1 Pro (高性能)',           note:'無料: 2 RPM / 50 RPD',    rpd: 50   },
   ];
+  // RPDが最大のモデルを自動選択（null=無制限は最大扱い）
+  const DEFAULT_MODEL_ID = DEFAULT_MODELS.reduce((best, m) => {
+    const bRpd = best.rpd ?? Infinity;
+    const mRpd = m.rpd ?? Infinity;
+    return mRpd > bRpd ? m : best;
+  }, DEFAULT_MODELS[0]).id;
 
   const ts  = () => Date.now();
   const uid = () => Math.random().toString(36).slice(2);
@@ -899,7 +905,7 @@
     const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS);
     const [settings, setSettings]   = useState({
       level:'advanced', intensity:'moderate', rounds:5,
-      model:'gemini-3.1-flash-lite',
+      model: DEFAULT_MODEL_ID,
       reqDelay:4,   // リクエスト間隔（秒）。
     });
     const [isFetchingModels, setIsFetchingModels] = useState(false);
