@@ -1639,7 +1639,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         value={p.name} 
                         onChange={e => setPresets(prev => prev.map(x => x.id === p.id ? { ...x, name: e.target.value } : x))}
                         onBlur={() => { saveHistory(); setEditingPresetId(null); }}
-                        onKeyDown={e => { if(e.key === 'Enter') { saveHistory(); setEditingPresetId(null); }}}
+                        onKeyDown={e => { if(e.key === 'Enter' && !e.nativeEvent.isComposing) { saveHistory(); setEditingPresetId(null); }}}
                       />
                     ) : (
                       <span className="preset-name" onDoubleClick={() => setEditingPresetId(p.id)}>{p.name}</span>
