@@ -1865,6 +1865,31 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                   <div ref={endRef}/>
                 </div>
 
+                {/* 停止 / 続きを生成 ボタン */}
+                <div style={{display:'flex', justifyContent:'center', padding:'6px 16px 0', gap:8}}>
+                  {isGen ? (
+                    <button onClick={stopTalking} style={{
+                      display:'flex', alignItems:'center', gap:6,
+                      padding:'7px 20px', borderRadius:8, border:'1px solid #ef4444',
+                      background:'#fff5f5', color:'#ef4444', fontSize:12, fontWeight:700,
+                      cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                      議論を停止
+                    </button>
+                  ) : (
+                    <button onClick={handleContinue} style={{
+                      display:'flex', alignItems:'center', gap:6,
+                      padding:'7px 20px', borderRadius:8, border:'1px solid #c8d5e3',
+                      background:'#f8fafc', color:'#5a7ba2', fontSize:12, fontWeight:600,
+                      cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      続きを生成
+                    </button>
+                  )}
+                </div>
+
                 {/* Input bar */}
                 <div className={`input-bar ${voiceMode ? 'voice-active' : ''}`} style={{borderTop:'1px solid #e5e7eb', background:'#fff'}}>
                   <div className="voice-mode-toggle-line" style={{borderBottom:'1px solid #f9fafb', paddingBottom:6, marginBottom:4}}>
