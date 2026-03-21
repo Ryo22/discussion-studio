@@ -564,6 +564,27 @@
     }
   ];
 
+  const DEFAULT_TEACHER_STUDENT = [
+    {
+      id:'ts0', name:'先生',
+      role:'専門家・指導者 (Expert Teacher)',
+      description:'テーマについて深い専門知識を持つプロフェッショナル。生徒の理解度に合わせて噛み砕いて説明し、具体例・比喩・問いかけを活用しながら思考を引き出す。一方的に教えるのではなく、生徒が「なぜ？」「どうして？」と考えたくなるよう導く。生徒の発言に丁寧に反応し、誤解には優しく訂正を加える。',
+      color:'#1e40af', power:4
+    },
+    {
+      id:'ts1', name:'生徒A',
+      role:'積極的な学習者 (Curious Learner)',
+      description:'テーマに強い興味を持ち、先生から積極的に知識を引き出そうとする。「なぜそうなるのですか？」「具体的にはどういうことですか？」と質問を重ね、理解を深める。分からないことは素直に認め、自分の言葉で理解したことを確認しながら学ぶ姿勢を持つ。',
+      color:'#047857', power:-2
+    },
+    {
+      id:'ts2', name:'生徒B',
+      role:'懐疑的な学習者 (Critical Learner)',
+      description:'先生の説明を鵜呑みにせず、「本当にそうなのか？」「別の見方はないか？」と批判的に考える学習者。反論や別の仮説を提示しながら議論を深め、先生から更に詳しい説明を引き出す。理解が追いつかない部分は正直に伝え、丁寧な解説を求める。',
+      color:'#7c3aed', power:-2
+    }
+  ];
+
   const LEVEL_MAP   = { general:'一般向け', intermediate:'中級', advanced:'専門家向け' };
   const INTENS_MAP  = { calm:'冷静', moderate:'普通', heated:'白熱' };
 
@@ -847,6 +868,10 @@
       // 新しい三派プリセットがなければ追加
       if (!initial.find(p => p.name.includes('三派'))) {
         initial.push({ id: 'p-tri', name: '議論三派（＋議長）', experts: DEFAULT_TRI_FACTIONS });
+      }
+      // 先生と生徒プリセットがなければ追加
+      if (!initial.find(p => p.name.includes('先生と生徒'))) {
+        initial.push({ id: 'p-ts', name: '先生と生徒', experts: DEFAULT_TEACHER_STUDENT });
       }
       return initial;
     });
