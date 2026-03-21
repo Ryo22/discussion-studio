@@ -1859,6 +1859,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!confirm(`「${s.topic}」を削除しますか？`)) return;
                             const next = sessions.filter(x => x.id !== s.id);
                             setSessions(next);
                             if (s.id === curSessionId) handleReset();
