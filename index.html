@@ -1669,7 +1669,12 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
             </div>
 
             <div className="sidebar-section" style={{borderTop:'none', paddingTop:0}}>
-              <div className="sidebar-title">ロール ({experts.length})</div>
+              <div className="sidebar-title">
+                ロール ({experts.length})
+                {DEFAULT_PRESET_IDS.includes(activePresetId) && (
+                  <span title="デフォルトプリセットは読み取り専用です。⧉ で複製すると編集できます。" style={{marginLeft:5,fontSize:10,color:'#9ca3af',cursor:'default'}}>🔒</span>
+                )}
+              </div>
               <div className="expert-list-scroll">
                 {experts.map(exp=>(
                   <div className="expert-item" key={exp.id}>
@@ -1683,12 +1688,18 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         {exp.power>0?`+${exp.power}`:exp.power}
                       </span>
                     )}
-                    <button className="expert-edit-btn" onClick={()=>setExpertModal(exp)}>✏️</button>
-                    <button className="expert-delete-btn" title="ロールを削除" onClick={(e) => { e.stopPropagation(); delExpert(exp.id); }}>×</button>
+                    {!DEFAULT_PRESET_IDS.includes(activePresetId) && (
+                      <>
+                        <button className="expert-edit-btn" onClick={()=>setExpertModal(exp)}>✏️</button>
+                        <button className="expert-delete-btn" title="ロールを削除" onClick={(e) => { e.stopPropagation(); delExpert(exp.id); }}>×</button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
-              <button className="add-expert-btn" onClick={()=>setExpertModal('new')}>＋ ロールを追加</button>
+              {!DEFAULT_PRESET_IDS.includes(activePresetId) && (
+                <button className="add-expert-btn" onClick={()=>setExpertModal('new')}>＋ ロールを追加</button>
+              )}
             </div>
 
             <div className="sidebar-section">
