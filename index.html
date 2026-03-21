@@ -1371,6 +1371,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
         id: sessId,
         topic: topic.trim(),
         experts: [...experts],
+        presetId: activePresetId,
         branches: [{ id: branchId, name:'本流', parentId:null, messages:[] }],
         createdAt: ts(),
         lastActive: ts()
@@ -1461,6 +1462,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
       stopTalking();
       setTopic(s.topic);
       setExperts(s.experts);
+      if (s.presetId) setActivePresetId(s.presetId);
       setBranches(s.branches);
       // ブランチのメッセージデータをworkingMsgsに即時反映
       s.branches.forEach(b => {
@@ -1578,7 +1580,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                 <button className="icon-btn-small" onClick={() => {
                   saveHistory();
                   const newId = `p-${uid()}`;
-                  setPresets([...presets, { id: newId, name: `新規セット ${presets.length + 1}`, experts: DEFAULT_EXPERTS }]);
+                  setPresets([...presets, { id: newId, name: `新規セット ${presets.length + 1}`, experts: [] }]);
                   setActivePresetId(newId);
                 }} title="プリセットを追加">📁＋</button>
               </div>
@@ -1618,7 +1620,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
             </div>
 
             <div className="sidebar-section" style={{borderTop:'none', paddingTop:0}}>
-              <div className="sidebar-title">精鋭ロール ({experts.length})</div>
+              <div className="sidebar-title">ロール ({experts.length})</div>
               <div className="expert-list-scroll">
                 {experts.map(exp=>(
                   <div className="expert-item" key={exp.id}>
@@ -1780,7 +1782,7 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                   <div className="landing-icon">🌐</div>
                   <div className="landing-title">世界会議をシミュレート</div>
                   <div className="landing-sub">
-                    12の精鋭ロールが、あなたが設定したテーマについて<br/>それぞれの立場から多角的に議論を展開します
+                    ロールが、あなたが設定したテーマについて<br/>それぞれの立場から多角的に議論を展開します
                   </div>
                   <div className="role-preview-grid">
                     {experts.slice(0,12).map(e=>(
