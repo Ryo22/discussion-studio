@@ -585,6 +585,9 @@
     }
   ];
 
+  // 削除・リネーム不可のデフォルトプリセットID
+  const DEFAULT_PRESET_IDS = ['p-default', 'p-tri', 'p-ts'];
+
   const LEVEL_MAP   = { general:'一般向け', intermediate:'中級', advanced:'専門家向け' };
   const INTENS_MAP  = { calm:'冷静', moderate:'普通', heated:'白熱' };
 
@@ -1632,17 +1635,32 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                       <span className="preset-name" onDoubleClick={() => setEditingPresetId(p.id)}>{p.name}</span>
                     )}
                     <div className="preset-actions">
-                      <button className="preset-action-btn" onClick={(e) => { e.stopPropagation(); setEditingPresetId(p.id); }}>✎</button>
-                      {presets.length > 1 && (
-                        <button className="preset-action-btn" onClick={(e) => { 
-                          e.stopPropagation(); 
-                          if(confirm('このプリセットを削除しますか？')) {
-                            saveHistory();
-                            const next = presets.filter(x => x.id !== p.id);
-                            setPresets(next);
-                            if(activePresetId === p.id) setActivePresetId(next[0].id);
-                          }
-                        }}>×</button>
+                      {!DEFAULT_PRESET_IDS.includes(p.id) && (
+                        <button className="preset-action-btn" title="名前を変更" onClick={(e) => { e.stopPropagation(); setEditingPresetId(p.id); }}>✎</button>
+                      )}
+                      {DEFAULT_PRESET_IDS.includes(p.id) ? (
+                        <button className="preset-action-btn" title="複製して編集" onClick={(e) => {
+                          e.stopPropagation();
+                          saveHistory();
+                          const newId = `p-${uid()}`;
+                          const copy = { id: newId, name: `${p.name}（コピー）`, experts: p.experts.map(ex => ({ ...ex })) };
+                          const next = [...presets, copy];
+                          setPresets(next);
+                          setActivePresetId(newId);
+                          setEditingPresetId(newId);
+                        }}>⧉</button>
+                      ) : (
+                        presets.length > 1 && (
+                          <button className="preset-action-btn" title="削除" onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm('このプリセットを削除しますか？')) {
+                              saveHistory();
+                              const next = presets.filter(x => x.id !== p.id);
+                              setPresets(next);
+                              if(activePresetId === p.id) setActivePresetId(next[0].id);
+                            }
+                          }}>×</button>
+                        )
                       )}
                     </div>
                   </div>
