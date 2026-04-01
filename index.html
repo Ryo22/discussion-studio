@@ -439,6 +439,9 @@
       from { opacity: 0; transform: translate(-50%, 20px); }
       to { opacity: 1; transform: translate(-50%, 0); }
     }
+    .hist-item:hover .sess-del-btn, .hist-item:hover .sess-exp-btn { opacity: 1 !important; }
+    .sess-del-btn:hover { color: #ef4444 !important; }
+    .sess-exp-btn:hover { color: #3b82f6 !important; }
     </style>
   </head>
 <body>
@@ -619,6 +622,35 @@
   const ts  = () => Date.now();
   const uid = () => Math.random().toString(36).slice(2);
   const fmtTime = (t) => { const d=new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+
+  const downloadFile = (content, fileName, contentType) => {
+    const a = document.createElement("a");
+    const file = new Blob([content], { type: contentType });
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const exportSessionMarkdown = (s) => {
+    if (!s) return "";
+    let md = `# 議題: ${s.topic}\n開始日時: ${new Date(s.createdAt).toLocaleString()}\n\n`;
+    s.branches.forEach(b => {
+      md += `## ブランチ: ${b.name}${b.parentId ? ' (分岐元から)' : ''}\n\n`;
+      b.messages.forEach(m => {
+        const time = fmtTime(m.timestamp);
+        if (m.type === 'user') {
+          md += `### あなた [${time}]\n${m.content}\n\n`;
+        } else {
+          const snapshot = m.expertSnapshot || {};
+          const name = (snapshot.name?.trim() ? snapshot.name.trim() : snapshot.role?.split(' (')[0]) || '?';
+          md += `### ${name} (${snapshot.role || '？'}) [${time}]\n${m.content}\n\n`;
+        }
+      });
+      md += "---\n\n";
+    });
+    return md;
+  };
 
   // 簡易難読化（ローカルストレージ用）
   const encK = (k) => k ? btoa(k.split('').reverse().join('')) : '';
@@ -1971,6 +2003,20 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const md = exportSessionMarkdown(s);
+                                downloadFile(md, `${s.topic}_${new Date(s.createdAt).toISOString().slice(0,10)}.md`, 'text/markdown');
+                              }}
+                              title="この議題をエクスポート(Markdown)"
+                              style={{
+                                flexShrink:0, background:'none', border:'none', cursor:'pointer',
+                                color:'#5a7ba2', fontSize:11, padding:'6px 3px 0 0', lineHeight:1,
+                                opacity:0, transition:'opacity 0.15s',
+                              }}
+                              className="sess-exp-btn"
+                            >📥</button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (!confirm(`「${s.topic}」を削除しますか？`)) return;
                                 const next = sessions.filter(x => x.id !== s.id);
                                 setSessions(next);
@@ -1988,12 +2034,23 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                         ));
                     })()}
                   </div>
-                  <button
-                    onClick={() => { if(confirm('すべての履歴を削除しますか？')) { setSessions([]); handleReset(); }}}
-                    style={{width:'100%', marginTop:12, padding:6, fontSize:9, color:'#9ca3af', background:'none', border:'none', cursor:'pointer'}}
-                  >
-                    🗑️ 全履歴を削除
-                  </button>
+                  <div style={{display:'flex', gap:5, marginTop:12}}>
+                    <button
+                      onClick={() => {
+                        const allMd = sessions.map(s => exportSessionMarkdown(s)).join('\n\n' + '='.repeat(40) + '\n\n');
+                        downloadFile(allMd, `全議題記録_${new Date().toISOString().slice(0,10)}.md`, 'text/markdown');
+                      }}
+                      style={{flex:1, padding:6, fontSize:9, color:'#5a7ba2', background:'white', border:'1px solid #c8d5e3', borderRadius:5, cursor:'pointer'}}
+                    >
+                      📥 全履歴エクスポート
+                    </button>
+                    <button
+                      onClick={() => { if(confirm('すべての履歴を削除しますか？')) { setSessions([]); handleReset(); }}}
+                      style={{flex:1, padding:6, fontSize:9, color:'#9ca3af', background:'none', border:'none', cursor:'pointer'}}
+                    >
+                      🗑️ 全履歴を削除
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -2113,6 +2170,19 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
                     {discSearch&&(
                       <button onClick={()=>{setDiscSearch('');setAiMatchIds(null);}} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:14,padding:'0 2px'}}>✕</button>
                     )}
+                    <div style={{width:1,height:16,background:'#e2e0db',margin:'0 2px'}}/>
+                    <button 
+                      onClick={() => {
+                        const curS = sessions.find(s => s.id === curSessionId);
+                        if (!curS) return;
+                        const md = exportSessionMarkdown(curS);
+                        downloadFile(md, `${curS.topic}.md`, 'text/markdown');
+                      }}
+                      title="現在の議論をエクスポート (Markdown)"
+                      style={{background:'#f0f4f9', border:'1px solid #c8d5e3', borderRadius:5, cursor:'pointer', fontSize:10, padding:'2px 8px', color:'#5a7ba2', fontWeight:600}}
+                    >
+                      📥 エクスポート
+                    </button>
                   </div>
                 )}
 
