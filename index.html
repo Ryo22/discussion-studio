@@ -701,9 +701,10 @@
     return `【発言力・影響力: ${p}（非常に弱い/周縁的）】あなたはこの会議において非常に弱い立場にある。慎重かつ謙虚に発言し、強い参加者の意見に押されることもある。それでも自分のロールの核心は主張すること。`;
   };
 
-  // ─── Supabase Configuration ────────────────────────────────────────────────
+  // ─── Configuration ────────────────────────────────────────────────────────
   const SB_URL = 'https://xyzwsrkvouivpikmdmxk.supabase.co';
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5endzcmt2b3VpdnBpa21kbXhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5ODIyNDcsImV4cCI6MjA4OTU1ODI0N30.fM1m7r2LWv-6156QwZ4G0b7buXW7YcitKGLAyFGmFDQ';
+  const DEFAULT_GEMINI_KEY = 'AIzaSyDbYnWvxRcNmbRAZNRSgeb9YWN7AYoMgck';
   const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 
   // ─── Components ──────────────────────────────────────────────────────────────
@@ -801,21 +802,34 @@
 
   // ─── ApiKeyModal ──────────────────────────────────────────────────────────────
   const ApiKeyModal = ({ currentKey='', onSave, onClose }) => {
-    const [k, setK] = useState(currentKey);
+    const [k, setK] = useState(currentKey === DEFAULT_GEMINI_KEY ? '' : currentKey);
+    const isDefault = currentKey === DEFAULT_GEMINI_KEY;
     return (
-      <div className="overlay">
-        <div className="modal">
+      <div className="overlay" onClick={onClose}>
+        <div className="modal" onClick={e=>e.stopPropagation()}>
           <div className="modal-title">🔑 Gemini APIキーを設定</div>
-          <p className="modal-desc">Google AI Studio（無料）でAPIキーを取得してください。<br/>
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="api-link">→ aistudio.google.com でAPIキーを取得</a>
+          <p className="modal-desc">
+            {isDefault ? (
+              <span style={{color:'#4a7a63', fontSize:12, background:'#e7f0e9', padding:'4px 8px', borderRadius:6, marginBottom:10, display:'inline-block'}}>
+                ✅ 現在、管理者設定のデフォルトキーが有効です
+              </span>
+            ) : (
+              <span style={{color:'#5a7ba2', fontSize:12, background:'#edf1f6', padding:'4px 8px', borderRadius:6, marginBottom:10, display:'inline-block'}}>
+                ⚙️ 現在、あなたの個人キーが設定されています
+              </span>
+            )}
+            <br/>Google AI Studio（無料）でご自分のAPIキーを取得し、それを設定して利用することも可能です。
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" className="api-link">→ aistudio.google.com で取得</a>
           </p>
           <div className="form-field">
-            <div className="form-label">APIキー</div>
+            <div className="form-label">APIキー (空欄で保存するとデフォルトに戻ります)</div>
             <input className="form-input" type="password" value={k} onChange={e=>setK(e.target.value)} placeholder="AIza..." />
           </div>
           <div className="modal-actions">
-            {onClose && <button className="btn-secondary" onClick={onClose}>キャンセル</button>}
-            <button className="btn-primary" onClick={()=>k.trim()&&onSave(k.trim())}>保存</button>
+            <button className="btn-secondary" onClick={onClose}>キャンセル</button>
+            <button className="btn-primary" onClick={()=>onSave(k.trim() || DEFAULT_GEMINI_KEY)}>
+              {k.trim() ? '個人キーを保存' : 'デフォルトを使用する'}
+            </button>
           </div>
         </div>
       </div>
@@ -1032,7 +1046,10 @@
 
   // ─── App ─────────────────────────────────────────────────────────────────────
   const App = () => {
-    const [apiKey, setApiKey]   = useState(()=>decK(localStorage.getItem('eds_key_enc'))||'');
+    const [apiKey, setApiKey]   = useState(() => {
+      const stored = localStorage.getItem('eds_key_enc');
+      return (stored && decK(stored)) || DEFAULT_GEMINI_KEY;
+    });
     const [presets, setPresets] = useState(() => {
       const saved = localStorage.getItem('eds_presets');
       const loaded = saved ? JSON.parse(saved) : [];
@@ -1107,7 +1124,7 @@
       setExperts(DEFAULT_PRESETS[0].experts);
       setActivePresetId(DEFAULT_PRESETS[0].id);
       setPresets(DEFAULT_PRESETS);
-      setApiKey(''); // APIキーもアカウントごとに分ける場合はリセット
+      setApiKey(DEFAULT_GEMINI_KEY); // デフォルトキーにリセット
     };
 
     useEffect(() => {
