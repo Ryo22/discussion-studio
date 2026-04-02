@@ -917,10 +917,21 @@
       try {
         if (mode === 'login') {
           const { error } = await sb.auth.signInWithPassword({ email, password });
-          if (error) throw error;
+          if (error) {
+            if (error.message.includes('Invalid login credentials')) {
+              throw new Error('メールアドレスまたはパスワードが正しくありません。');
+            }
+            throw error;
+          }
         } else if (mode === 'signup') {
           const { error } = await sb.auth.signUp({ email, password });
-          if (error) throw error;
+          if (error) {
+            // すでに登録されている場合や制限
+            if (error.message.includes('User already registered')) {
+              throw new Error('このメールアドレスは既に登録されています。Google認証をご利用か、パスワードの再設定をお試しください。');
+            }
+            throw error;
+          }
           setAuthMsg('確認メールを送信しました。メール内のリンクをクリックして登録を完了してください。');
         } else if (mode === 'forgot') {
           const { error } = await sb.auth.resetPasswordForEmail(email, {
@@ -952,7 +963,7 @@
             fontSize:22, fontWeight:800, color:'#c8d0df', margin:'0 auto 16px'
           }}>DS</div>
           <div style={{fontSize:22, fontWeight:700, color:'#2d3142', marginBottom:6}}>Discussion Studio</div>
-          <div style={{fontSize:13, color:'#6b7280', marginBottom:24}}>様々な役割のAI同士があなたの議論をサポート</div>
+          <div style={{fontSize:13, color:'#6b7280', marginBottom:24}}>多彩な専門家AIが、多角的な視点から議論を自律的に深めます</div>
 
           <div className="auth-tabs">
             <div className={`auth-tab ${mode==='login'?'active':''}`} onClick={()=>setMode('login')}>ログイン</div>
