@@ -704,7 +704,7 @@
   // ─── Configuration ────────────────────────────────────────────────────────
   const SB_URL = 'https://xyzwsrkvouivpikmdmxk.supabase.co';
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5endzcmt2b3VpdnBpa21kbXhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5ODIyNDcsImV4cCI6MjA4OTU1ODI0N30.fM1m7r2LWv-6156QwZ4G0b7buXW7YcitKGLAyFGmFDQ';
-  const DEFAULT_GEMINI_KEY = 'AIzaSyDbYnWvxRcNmbRAZNRSgeb9YWN7AYoMgck';
+  const DEFAULT_GEMINI_KEY = '';
   const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 
   // ─── Components ──────────────────────────────────────────────────────────────
@@ -1121,9 +1121,9 @@
       setSessions([]);
       setCurSessionId(null);
       setTopic('');
-      setExperts(DEFAULT_PRESETS[0].experts);
-      setActivePresetId(DEFAULT_PRESETS[0].id);
-      setPresets(DEFAULT_PRESETS);
+      setExperts(DEFAULT_PRESET_DEFS[0].experts);
+      setActivePresetId(DEFAULT_PRESET_DEFS[0].id);
+      setPresets(DEFAULT_PRESET_DEFS);
       setApiKey(DEFAULT_GEMINI_KEY); // デフォルトキーにリセット
     };
 
