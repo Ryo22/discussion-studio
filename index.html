@@ -801,17 +801,19 @@
   };
 
   // ─── ApiKeyModal ──────────────────────────────────────────────────────────────
-  const ApiKeyModal = ({ currentKey='', onSave, onClose }) => {
-    const [k, setK] = useState(currentKey === DEFAULT_GEMINI_KEY ? '' : currentKey);
-    const isDefault = currentKey === DEFAULT_GEMINI_KEY;
+  const ApiKeyModal = ({ currentKey='', sharedKey='', onSave, onClose }) => {
+    // もし入力されたキーがデフォルトと同じなら空欄で見せる、そうでなければそのキーを見せる
+    const isActuallyDefault = !currentKey || currentKey === DEFAULT_GEMINI_KEY;
+    const [k, setK] = useState(isActuallyDefault ? '' : currentKey);
+    
     return (
       <div className="overlay" onClick={onClose}>
         <div className="modal" onClick={e=>e.stopPropagation()}>
           <div className="modal-title">🔑 Gemini APIキーを設定</div>
           <p className="modal-desc">
-            {isDefault ? (
+            {isActuallyDefault ? (
               <span style={{color:'#4a7a63', fontSize:12, background:'#e7f0e9', padding:'4px 8px', borderRadius:6, marginBottom:10, display:'inline-block'}}>
-                ✅ 現在、管理者設定のデフォルトキーが有効です
+                ✅ 現在、{sharedKey ? '管理者設定の共有キー' : '初期設定のキー'}が有効です
               </span>
             ) : (
               <span style={{color:'#5a7ba2', fontSize:12, background:'#edf1f6', padding:'4px 8px', borderRadius:6, marginBottom:10, display:'inline-block'}}>
@@ -822,13 +824,13 @@
             <a href="https://aistudio.google.com/app/apikey" target="_blank" className="api-link">→ aistudio.google.com で取得</a>
           </p>
           <div className="form-field">
-            <div className="form-label">APIキー (空欄で保存するとデフォルトに戻ります)</div>
+            <div className="form-label">APIキー (空欄で保存すると管理者設定に戻ります)</div>
             <input className="form-input" type="password" value={k} onChange={e=>setK(e.target.value)} placeholder="AIza..." />
           </div>
           <div className="modal-actions">
             <button className="btn-secondary" onClick={onClose}>キャンセル</button>
             <button className="btn-primary" onClick={()=>onSave(k.trim() || DEFAULT_GEMINI_KEY)}>
-              {k.trim() ? '個人キーを保存' : 'デフォルトを使用する'}
+              {k.trim() ? '個人キーを保存' : '設定をリセット（共通設定を使用）'}
             </button>
           </div>
         </div>
@@ -1116,7 +1118,26 @@
     const settingsRef  = useRef(settings);
     const topicRef     = useRef(topic);
 
-    // ─── Auth ─────────────────────────────────────────────────────────────────
+    const [sharedDefaultKey, setSharedDefaultKey] = useState('');
+
+    useEffect(() => {
+      if (!sb) return;
+      const fetchSharedKey = async () => {
+        try {
+          const { data, error } = await sb.from('eds_shared_config').select('config_value').eq('config_key', 'default_gemini_key').single();
+          if (data && data.config_value) {
+            setSharedDefaultKey(data.config_value);
+          }
+        } catch (e) {
+          console.warn('共有デフォルトキーの取得に失敗しました（設定前の場合もあります）:', e);
+        }
+      };
+      fetchSharedKey();
+    }, []);
+
+    // 実際の動作に使用するキー（個人キー > 共有デフォルトキー > ハードコード空）
+    const effectiveApiKey = apiKey && apiKey !== DEFAULT_GEMINI_KEY ? apiKey : (sharedDefaultKey || DEFAULT_GEMINI_KEY);
+
     const resetLocalData = () => {
       setSessions([]);
       setCurSessionId(null);
@@ -1124,7 +1145,7 @@
       setExperts(DEFAULT_PRESET_DEFS[0].experts);
       setActivePresetId(DEFAULT_PRESET_DEFS[0].id);
       setPresets(DEFAULT_PRESET_DEFS);
-      setApiKey(DEFAULT_GEMINI_KEY); // デフォルトキーにリセット
+      setApiKey(''); // 空に戻し、共有キーが使われるようにする
     };
 
     useEffect(() => {
@@ -1393,7 +1414,7 @@
       try {
         const msgList = messages.map(m => `ID:${m.id} | ${m.content.slice(0, 300)}`).join('\n');
         const prompt = `以下の議論メッセージから「${discSearch}」という観点に関連するものを見つけてください。\n関連するメッセージのIDのみをカンマ区切りで返してください。他の文字は一切含めないでください。\n\n${msgList}`;
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${apiKey}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${effectiveApiKey}`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}], generationConfig:{temperature:0.1,maxOutputTokens:500}})
         });
@@ -1415,7 +1436,7 @@
           return `ID:${s.id} | 議題:${s.topic} | 内容:${msgs}`;
         }).join('\n');
         const prompt = `以下の議論履歴から「${histSearch}」に関連するものを見つけてください。\n関連する履歴のIDのみをカンマ区切りで返してください。他の文字は一切含めないでください。\n\n${sessList}`;
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${apiKey}`, {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${effectiveApiKey}`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}], generationConfig:{temperature:0.1,maxOutputTokens:500}})
         });
@@ -1425,7 +1446,7 @@
         setHistAiMatchIds(ids);
       } catch(e) { console.error('Hist AI search error:', e); }
       setHistSearchLoading(false);
-    }, [apiKey, histSearch, sessions, settings.model]);
+    }, [effectiveApiKey, histSearch, sessions, settings.model]);
 
     // モデル一覧を取得する関数
     const fetchAvailableModels = useCallback(async (key) => {
@@ -1488,8 +1509,8 @@
     }, []);
 
     useEffect(() => {
-      if (apiKey) fetchAvailableModels(apiKey);
-    }, [apiKey, fetchAvailableModels]);
+      if (effectiveApiKey) fetchAvailableModels(effectiveApiKey);
+    }, [effectiveApiKey, fetchAvailableModels]);
 
     const initBranch = (id, base=[]) => { workingMsgs.current[id] = [...base]; };
     const getMsgs    = (id) => workingMsgs.current[id] || [];
@@ -1516,7 +1537,7 @@
 
       try {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${effectiveApiKey}`,
           { 
             method:'POST', headers:{'Content-Type':'application/json'},
             signal: abortControllerRef.current.signal,
@@ -2418,13 +2439,13 @@ ${exps.map(e => `- ID: ${e.id}, ロール: ${e.role}, 名前: ${e.name}`).join('
         {showApi && (
           <ApiKeyModal
             currentKey={apiKey}
-            onSave={k=>{
-              const encrypted = encK(k);
-              localStorage.setItem('eds_key_enc', encrypted);
+            sharedKey={sharedDefaultKey}
+            onSave={k => {
               setApiKey(k);
               setShowApi(false);
+              showToast('APIキーを保存しました');
             }}
-            onClose={()=>setShowApi(false)}
+            onClose={() => setShowApi(false)}
           />
         )}
         {expertModal && (
