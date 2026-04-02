@@ -1096,8 +1096,13 @@
     const settingsRef  = useRef(settings);
     const topicRef     = useRef(topic);
 
-    // ─── Auth ─────────────────────────────────────────────────────────────────
+    // ─── Auth (Bypassed in no-auth branch) ───────────────────────────────────
     useEffect(() => {
+      // no-auth ブランチでは常にゲストユーザーとして動作させる
+      setUser({ id: 'guest-user', email: 'guest@discussion-studio.app' });
+      setAuthLoading(false);
+      /* 
+      // 元の認証ロジック（切替用として残す場合はコメントアウト）
       if (!sb) { setAuthLoading(false); return; }
       sb.auth.getSession().then(({ data: { session } }) => {
         setUser(session?.user || null);
@@ -1105,12 +1110,9 @@
       });
       const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user || null);
-        if (!session?.user) {
-          // ログアウト時はローカルの同期済みフラグをリセット
-          initialSyncCompleted.current = false;
-        }
       });
       return () => subscription.unsubscribe();
+      */
     }, []);
 
     const saveToCloud = useCallback(async (key, data) => {
